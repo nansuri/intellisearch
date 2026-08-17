@@ -31,6 +31,7 @@ This document is the implementation truth for the repository. The PRD and SDD re
 - Frontend auth store (JWT in localStorage, `restore()` on boot, 401 expiry handling), admin router guards, typed API client with friendly per-error-code messages, and a toast notification system reused across the panel.
 - **Session persistence on hard refresh:** the router guard restores the user whenever a token exists but the in-memory profile is missing, so a reload no longer appears to log the user out.
 - **Login UX:** refreshed sign-in page with a Google SSO button (shown only when the backend reports `googleSsoEnabled`), success animation before redirect, and post-login redirect to the **main page** for all users (Super Owners using `/admin/login` still land in the panel). Page transitions upgraded to a fade + slide + blur.
+- **Search history:** every non-URL ask by a signed-in user is recorded in a dedicated `search_history` table (separate from `usage_logs` so admin stats/quotas are unaffected). The main page shows the user's **recent searches** as clickable chips under the ask box, plus **AI-composed suggestions** derived from their history (composed by the active LLM, cached ~10 min, refreshable via a ↻ button, gracefully hidden when the provider is down or history is empty). **Account Settings** lists the full history with timestamps and a **Clear history** button (with confirmation). Endpoints: `GET/PATCH/DELETE /api/v1/me/history` + `GET /api/v1/me/history/suggestions`; error codes `USER03001/2`.
 
 ### Backend foundation
 
@@ -77,7 +78,7 @@ This document is the implementation truth for the repository. The PRD and SDD re
 
 ## Verification status
 
-- `go test ./...`: passing (envelope + error-code format, AES-GCM round-trip, Ollama/OpenAI client mapping, SearXNG mapping, SSRF guard, crawl lifecycle, AI pipeline persistence + graceful degradation, queue overflow → `AISY02001`, rate limit → `AISY02002`, daily quota → `AISY02003`, logo upload/delete with default fallback, stats trends daily/weekly bucketing). Race detector clean.
+- `go test ./...`: passing (envelope + error-code format, AES-GCM round-trip, Ollama/OpenAI client mapping, SearXNG mapping, SSRF guard, crawl lifecycle, AI pipeline persistence + graceful degradation, queue overflow → `AISY02001`, rate limit → `AISY02002`, daily quota → `AISY02003`, logo upload/delete with default fallback, stats trends daily/weekly bucketing, search-history record/clear/suggestions + router coverage). Race detector clean.
 - `go build ./...`, `go vet ./...`: passing.
 - `npm run typecheck` and `npm run build`: passing (all admin views compile; lazy-loaded routes).
 - Live smoke: `/health`, `/site`, `/ask` (provider-down → 503 `AISY01001` with sanitized message), empty query → 400 `AISY01004`, blocked URL → 403 `AISY03002`, invalid URL → 400 `AISY03003`, sessions without auth → 401; Redis rate limiting + hot-reloaded queue config verified; headless-browser check of MainPage and ResultPage (query, error banner, retry, URL box) passing.

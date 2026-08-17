@@ -112,6 +112,16 @@ type UsageLog struct {
 	CreatedAt    time.Time  `json:"createdAt"`
 }
 
+// SearchHistory is a per-user record of every search they run. It powers the
+// "recent searches" chips on the main page and the AI-composed suggestions,
+// and can be cleared by the user from Account Settings.
+type SearchHistory struct {
+	ID        uint64    `gorm:"primaryKey" json:"id"`
+	UserID    uuid.UUID `gorm:"type:uuid;not null;index:idx_search_history_user,priority:1" json:"userId"`
+	Query     string    `gorm:"type:text;not null" json:"query"`
+	CreatedAt time.Time `gorm:"index:idx_search_history_user,priority:2" json:"createdAt"`
+}
+
 type CrawlJob struct {
 	ID         uuid.UUID  `gorm:"type:uuid;primaryKey" json:"id"`
 	UserID     *uuid.UUID `gorm:"type:uuid;index" json:"userId,omitempty"`

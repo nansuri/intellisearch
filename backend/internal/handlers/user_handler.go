@@ -1,18 +1,26 @@
 package handlers
 
 import (
+	"errors"
+	"net/http"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
+
 	"intellisearch/internal/contracts"
 	"intellisearch/internal/middleware"
 	"intellisearch/internal/services"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"net/http"
 )
 
-type UserHandler struct{ service *services.UserService }
+type UserHandler struct {
+	service *services.UserService
+	history *services.SearchHistoryService
+}
 
-func NewUserHandler(service *services.UserService) *UserHandler {
-	return &UserHandler{service: service}
+func NewUserHandler(service *services.UserService, history *services.SearchHistoryService) *UserHandler {
+	return &UserHandler{service: service, history: history}
 }
 
 // Me returns the user's profile plus today's AI usage and remaining quota.
@@ -62,6 +70,50 @@ func (h *UserHandler) UpdateMe(c *gin.Context) {
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(user))
+}
+
+// History returns the signed-in user's recent searches, newest first.
+func (h *UserHandler) History(c *gin.Context) {
+	limit := 20
+	if raw := c.Query("limit"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	entries, err := h.history.Recent(c.MustGet(middleware.UserIDKey).(uuid.UUID), limit)
+	if err != nil {
+		logrus.WithError(err).Error("search history load failed")
+		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.USER03001, "Your search history could not be loaded."))
+		return
+	}
+	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"items": entries}))
+}
+
+// Suggestions returns AI-composed follow-up questions derived from the user's
+// search history. Provider failures degrade to an empty list so the UI just
+// hides the row.
+func (h *UserHandler) Suggestions(c *gin.Context) {
+	suggestions, err := h.history.Suggestions(c.Request.Context(), c.MustGet(middleware.UserIDKey).(uuid.UUID))
+	if err != nil {
+		if !errors.Is(err, services.ErrHistoryEmpty) {
+			logrus.WithError(err).Error("search history suggestions failed")
+		}
+		suggestions = []string{}
+	}
+	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"suggestions": suggestions}))
+}
+
+// ClearHistory deletes all of the signed-in user's search history.
+func (h *UserHandler) ClearHistory(c *gin.Context) {
+	if err := h.history.Clear(c.MustGet(middleware.UserIDKey).(uuid.UUID)); err != nil {
+		logrus.WithError(err).Error("search history clear failed")
+		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.USER03002, "Your search history could not be cleared."))
+		return
+	}
+	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"cleared": true}))
 }
 
 // Avatar handles single-file avatar uploads.

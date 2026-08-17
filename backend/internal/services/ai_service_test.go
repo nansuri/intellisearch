@@ -50,6 +50,7 @@ func newAITestEnv(t *testing.T, searchDown bool) (*AIService, *gorm.DB) {
 		repositories.NewUsageLogRepository(db),
 		providerRepo,
 		repositories.NewUserRepository(db),
+		repositories.NewSearchHistoryRepository(db),
 		NewSearchService(config.Config{SearXNGBaseURL: searchServer.URL, SearXNGTimeoutMS: 2000}),
 		NewCrawlService(crawlServer.URL, 5000, repositories.NewCrawlJobRepository(db)),
 		NewLLMService(providerRepo, "key"),
@@ -145,5 +146,32 @@ func TestAnswerRejectsEmptyQuery(t *testing.T) {
 	service, _ := newAITestEnv(t, false)
 	if _, err := service.Answer(context.Background(), AskInput{Query: "   "}); !errors.Is(err, ErrInvalidQuery) {
 		t.Fatalf("expected ErrInvalidQuery, got %v", err)
+	}
+}
+
+func TestAnswerRecordsSearchHistoryForLoggedInUsers(t *testing.T) {
+	service, db := newAITestEnv(t, false)
+	userID := uuid.New()
+	if _, err := service.Answer(context.Background(), AskInput{Query: "history recording test", UserID: &userID}); err != nil {
+		t.Fatal(err)
+	}
+	var entries []entities.SearchHistory
+	if err := db.Where("user_id = ?", userID).Find(&entries).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Query != "history recording test" {
+		t.Fatalf("expected one history entry, got %#v", entries)
+	}
+}
+
+func TestAnswerSkipsHistoryForURLSubmissions(t *testing.T) {
+	service, db := newAITestEnv(t, false)
+	userID := uuid.New()
+	if _, err := service.Answer(context.Background(), AskInput{Query: "Summarize this page", URL: "https://example.com/article", UserID: &userID}); err != nil {
+		t.Fatal(err)
+	}
+	var count int64
+	if err := db.Model(&entities.SearchHistory{}).Count(&count).Error; err != nil || count != 0 {
+		t.Fatalf("URL submissions must not be recorded as history, got %d (err=%v)", count, err)
 	}
 }

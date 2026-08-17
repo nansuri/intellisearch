@@ -83,6 +83,16 @@
 
 > Branding must not be hardcoded. The code ships a generic default (`site_settings`), which the Super Owner overrides from the Owner Control Panel; the public main page always renders from `site_settings`.
 
+### search_history
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | bigserial (PK) | |
+| user_id | UUID (FK → users) | indexed with created_at |
+| query | text | sanitized question as asked |
+| created_at | timestamptz | |
+
+> Every non-URL ask by a signed-in user is recorded here. It powers the main-page "recent searches" chips and the AI-composed suggestions, and can be cleared by the user from Account Settings — deliberately separate from `usage_logs`, which keeps admin statistics and quota accounting intact.
+
 ### usage_logs
 | Field | Type | Notes |
 | --- | --- | --- |

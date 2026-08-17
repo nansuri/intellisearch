@@ -14,6 +14,8 @@ export const FRIENDLY_ERRORS: Record<string, string> = {
   AISY03003: 'That URL is not valid.',
   AISY03004: "We couldn't read that page — it may be unavailable or unreadable.",
   USER02002: 'The image must be a JPG, PNG, GIF, or WebP under 2 MB.',
+  USER03001: 'Your search history could not be loaded.',
+  USER03002: 'Your search history could not be cleared.',
   ADMN03002: 'That provider configuration is not valid.',
   ADMN04001: 'That queue configuration is not valid.',
   ADMN05001: 'That site configuration is not valid.',
@@ -58,6 +60,7 @@ export type UsersPage = { users: User[]; total: number; page: number; pageSize: 
 
 export type ProviderType = 'ollama' | 'openai_compatible' | 'pollinations' | 'huggingface'
 export type Provider = { id: string; name: string; providerType: ProviderType; baseUrl: string; model: string; parameters: Record<string, unknown> | null; isActive: boolean }
+export type HistoryItem = { id: number; query: string; createdAt: string }
 export type QueueConfig = { maxConcurrent: number; maxQueueSize: number; requestTimeoutMs: number; perUserRateLimit: number }
 export type TopQuery = { query: string; count: number }
 export type PerUserUsage = { userId: string; name: string; email: string; count: number }
@@ -84,6 +87,11 @@ export const logout = () => request<{ loggedOut: boolean }>('/auth/logout', { me
 export const getMe = () => request<MeResponse>('/me')
 export const updateMe = (name: string, email: string) => request<User>('/me', { method: 'PATCH', body: JSON.stringify({ name, email }) })
 export const uploadAvatar = (file: File) => upload<{ avatarUrl: string }>('/me/avatar', 'avatar', file)
+
+// Search history
+export const getHistory = (limit = 20) => request<{ items: HistoryItem[] }>(`/me/history?limit=${limit}`)
+export const getHistorySuggestions = () => request<{ suggestions: string[] }>('/me/history/suggestions')
+export const clearHistory = () => request<{ cleared: boolean }>('/me/history', { method: 'DELETE' })
 
 // Admin — users
 export const listUsers = (q: string, page: number, pageSize = 20) => request<UsersPage>(`/admin/users?q=${encodeURIComponent(q)}&page=${page}&page_size=${pageSize}`)

@@ -52,6 +52,7 @@ type AIService struct {
 	usageLogs *repositories.UsageLogRepository
 	providers *repositories.ProviderRepository
 	users     *repositories.UserRepository
+	history   *repositories.SearchHistoryRepository // nil disables recording (tests)
 	search    *SearchService
 	crawl     *CrawlService
 	llm       *LLMService
@@ -59,8 +60,8 @@ type AIService struct {
 	crawlTopN int
 }
 
-func NewAIService(sessions *repositories.SessionRepository, messages *repositories.MessageRepository, usageLogs *repositories.UsageLogRepository, providers *repositories.ProviderRepository, users *repositories.UserRepository, search *SearchService, crawl *CrawlService, llm *LLMService, geo *GeoService, crawlTopN int) *AIService {
-	return &AIService{sessions: sessions, messages: messages, usageLogs: usageLogs, providers: providers, users: users, search: search, crawl: crawl, llm: llm, geo: geo, crawlTopN: crawlTopN}
+func NewAIService(sessions *repositories.SessionRepository, messages *repositories.MessageRepository, usageLogs *repositories.UsageLogRepository, providers *repositories.ProviderRepository, users *repositories.UserRepository, history *repositories.SearchHistoryRepository, search *SearchService, crawl *CrawlService, llm *LLMService, geo *GeoService, crawlTopN int) *AIService {
+	return &AIService{sessions: sessions, messages: messages, usageLogs: usageLogs, providers: providers, users: users, history: history, search: search, crawl: crawl, llm: llm, geo: geo, crawlTopN: crawlTopN}
 }
 
 // Answer executes one ask job. It always persists a user message, an assistant
@@ -92,6 +93,14 @@ func (s *AIService) Answer(ctx context.Context, input AskInput) (AskResult, erro
 	usageLog := entities.UsageLog{ID: uint64(time.Now().UnixNano()), UserID: input.UserID, Query: query, Status: entities.MessageStatusQueued, CreatedAt: started}
 	if err := s.usageLogs.Create(&usageLog); err != nil {
 		return result, err
+	}
+
+	// Record the search in the user's history so the main page can show recent
+	// searches and AI-composed suggestions. URL submissions use a synthetic
+	// query, so they are skipped. Best-effort: a history write failure never
+	// fails the search itself.
+	if s.history != nil && input.UserID != nil && input.URL == "" {
+		_ = s.history.Create(&entities.SearchHistory{ID: uint64(time.Now().UnixNano()), UserID: *input.UserID, Query: query, CreatedAt: time.Now().UTC()})
 	}
 
 	provider, providerErr := s.providers.Active()

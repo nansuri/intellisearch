@@ -24,6 +24,12 @@ const USER02001 = "USER02001"
 // USER02002 indicates an avatar was rejected (unsupported type or too large).
 const USER02002 = "USER02002"
 
+// USER03001 indicates the user's search history could not be loaded.
+const USER03001 = "USER03001"
+
+// USER03002 indicates the user's search history could not be cleared.
+const USER03002 = "USER03002"
+
 // SITE01001 indicates site settings are not available.
 const SITE01001 = "SITE01001"
 

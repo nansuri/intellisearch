@@ -45,6 +45,9 @@ func New(corsOrigins, uploadsDir string, siteService *services.SiteService, auth
 	protected.GET("/me", userHandler.Me)
 	protected.PATCH("/me", userHandler.UpdateMe)
 	protected.POST("/me/avatar", userHandler.Avatar)
+	protected.GET("/me/history", userHandler.History)
+	protected.GET("/me/history/suggestions", userHandler.Suggestions)
+	protected.DELETE("/me/history", userHandler.ClearHistory)
 	protected.POST("/auth/logout", middleware.RequireSuperOwner(), authHandler.Logout)
 
 	admin := protected.Group("/admin")

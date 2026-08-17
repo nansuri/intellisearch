@@ -27,7 +27,7 @@ func newTestDB(t *testing.T) *gorm.DB {
 		t.Fatal(err)
 	}
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&entities.User{}, &entities.SiteSettings{}, &entities.AIQueueConfig{}, &entities.AIProvider{}, &entities.ChatSession{}, &entities.Message{}, &entities.SearchResult{}, &entities.UsageLog{}, &entities.CrawlJob{}); err != nil {
+	if err := db.AutoMigrate(&entities.User{}, &entities.SiteSettings{}, &entities.AIQueueConfig{}, &entities.AIProvider{}, &entities.ChatSession{}, &entities.Message{}, &entities.SearchResult{}, &entities.UsageLog{}, &entities.CrawlJob{}, &entities.SearchHistory{}); err != nil {
 		t.Fatal(err)
 	}
 	return db

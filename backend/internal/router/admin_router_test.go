@@ -42,7 +42,7 @@ func adminTestMux(t *testing.T) (*httptest.Server, *gorm.DB) {
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&entities.User{}, &entities.SiteSettings{}, &entities.AIQueueConfig{}, &entities.AIProvider{}, &entities.ChatSession{}, &entities.Message{}, &entities.SearchResult{}, &entities.UsageLog{}, &entities.CrawlJob{}); err != nil {
+	if err := db.AutoMigrate(&entities.User{}, &entities.SiteSettings{}, &entities.AIQueueConfig{}, &entities.AIProvider{}, &entities.ChatSession{}, &entities.Message{}, &entities.SearchResult{}, &entities.UsageLog{}, &entities.CrawlJob{}, &entities.SearchHistory{}); err != nil {
 		t.Fatal(err)
 	}
 	seed := func(user *entities.User, password string) {
@@ -67,13 +67,14 @@ func adminTestMux(t *testing.T) (*httptest.Server, *gorm.DB) {
 	cfg := config.Config{JWTSecret: "admin-test-secret-32-chars-minimum", JWTTTLHours: 24}
 	authService := services.NewAuthService(repositories.NewUserRepository(db), cfg)
 	userService := services.NewUserService(repositories.NewUserRepository(db), repositories.NewUsageLogRepository(db), t.TempDir())
+	historyService := services.NewSearchHistoryService(repositories.NewSearchHistoryRepository(db), services.NewLLMService(repositories.NewProviderRepository(db), cfg.JWTSecret))
 	adminService := services.NewAdminService(repositories.NewProviderRepository(db), repositories.NewQueueConfigRepository(db), repositories.NewSiteRepository(db), cfg.JWTSecret, t.TempDir())
 	statsService := services.NewStatsService(repositories.NewUsageLogRepository(db), repositories.NewUserRepository(db), repositories.NewProviderRepository(db), nil)
 	aiHandler := handlers.NewAIHandler(fakeRunner{}, repositories.NewQueueConfigRepository(db), repositories.NewUserRepository(db), repositories.NewUsageLogRepository(db), allowingLimiter{}, authService)
 	defer aiHandler.Stop()
 	adminHandler := handlers.NewAdminHandler(userService, adminService, statsService)
 	siteService := services.NewSiteService(repositories.NewSiteRepository(db))
-	mux := New("*", t.TempDir(), siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService), nil, aiHandler, adminHandler, authService)
+	mux := New("*", t.TempDir(), siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService, historyService), nil, aiHandler, adminHandler, authService)
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 	return server, db
@@ -348,6 +349,76 @@ func TestMeReturnsUsage(t *testing.T) {
 	status, payload := call(t, server, http.MethodGet, "/api/v1/me", token, nil)
 	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"role":"general_user"`)) {
 		t.Fatalf("me endpoint failed: %d %s", status, payload)
+	}
+}
+
+func TestSearchHistoryEndpoints(t *testing.T) {
+	server, db := adminTestMux(t)
+	token := loginToken(t, server, "jane@example.com", "jane-pass")
+
+	// Anonymous is rejected (401) on every history route.
+	for _, path := range []string{"/api/v1/me/history", "/api/v1/me/history/suggestions"} {
+		status, _ := call(t, server, http.MethodGet, path, "", nil)
+		if status != http.StatusUnauthorized {
+			t.Fatalf("expected 401 for anonymous on %s, got %d", path, status)
+		}
+	}
+
+	// Seed a few history entries for jane, then list them newest first.
+	historyRepo := repositories.NewSearchHistoryRepository(db)
+	uid := uuid.New()
+	var jane entities.User
+	if err := db.First(&jane, "email = ?", "jane@example.com").Error; err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	for i, q := range []string{"cheapest flights", "best ramen in tokyo", "cheapest flights"} {
+		if err := historyRepo.Create(&entities.SearchHistory{ID: uint64(now.UnixNano()) + uint64(i), UserID: jane.ID, Query: q, CreatedAt: now.Add(time.Duration(i) * time.Second)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// An entry for another user must not leak into jane's history.
+	if err := historyRepo.Create(&entities.SearchHistory{ID: uint64(now.UnixNano()) + 100, UserID: uid, Query: "private query", CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+
+	status, payload := call(t, server, http.MethodGet, "/api/v1/me/history", token, nil)
+	if status != http.StatusOK {
+		t.Fatalf("history list failed: %d %s", status, payload)
+	}
+	var listed struct {
+		Data struct {
+			Items []struct {
+				Query string `json:"query"`
+			} `json:"items"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(payload, &listed); err != nil {
+		t.Fatal(err)
+	}
+	if len(listed.Data.Items) != 3 || listed.Data.Items[0].Query != "cheapest flights" {
+		t.Fatalf("unexpected history listing: %s", payload)
+	}
+
+	// Suggestions degrade gracefully to an empty list (no provider configured
+	// in the test mux), never an error.
+	status, payload = call(t, server, http.MethodGet, "/api/v1/me/history/suggestions", token, nil)
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"suggestions":[]`)) {
+		t.Fatalf("suggestions should degrade to empty list: %d %s", status, payload)
+	}
+
+	// Clearing wipes jane's history only.
+	status, payload = call(t, server, http.MethodDelete, "/api/v1/me/history", token, nil)
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"cleared":true`)) {
+		t.Fatalf("clear history failed: %d %s", status, payload)
+	}
+	status, payload = call(t, server, http.MethodGet, "/api/v1/me/history", token, nil)
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"items":[]`)) {
+		t.Fatalf("history not cleared: %d %s", status, payload)
+	}
+	var remaining int64
+	if err := db.Model(&entities.SearchHistory{}).Count(&remaining).Error; err != nil || remaining != 1 {
+		t.Fatalf("expected only the other user's entry to remain, got %d (err=%v)", remaining, err)
 	}
 }
 

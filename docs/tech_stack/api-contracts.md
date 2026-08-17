@@ -24,6 +24,9 @@ Every API response uses:
 | POST | `/api/v1/ask/url` | public (stricter rate limit, 5/hour) | Crawls a submitted URL and answers about that page. Body: `{ url }`. Response shape matches `/ask`. URLs are SSRF-guarded (scheme + host validation, internal/private ranges blocked). |
 | GET | `/api/v1/sessions/:id` | public (anonymous sessions) or owner (signed-in sessions) | Returns one chat session with message history and per-message `sources`. Anonymous sessions (`userId` null) are readable by id without auth; owned sessions require the owning user. |
 | POST | `/api/v1/me/avatar` | user | Uploads the user's avatar image (JPG/PNG/GIF/WebP ≤ 2 MB) and returns `{ avatarUrl }`. |
+| GET | `/api/v1/me/history` | user | Returns the user's recent searches, newest first. Query: `limit` (default 20, max 100). Response: `{ items: [{ id, query, createdAt }] }`. Every non-URL ask by a signed-in user is recorded here. |
+| GET | `/api/v1/me/history/suggestions` | user | Asks the active LLM to compose 3 follow-up questions from the user's search history. Response: `{ suggestions: [string] }`. Degrades to an empty list when there is no history or the provider is unavailable. |
+| DELETE | `/api/v1/me/history` | user | Deletes all of the user's search history (returns `{ cleared: true }`). History rows power the main-page "recent searches" chips and AI suggestions, and are separate from `usage_logs` (admin stats and quotas are untouched). |
 | GET | `/api/v1/admin/users` | Super Owner | Lists/search users. Query: `q`, `page`, `page_size`. Response: `{ users, total, page, pageSize }`. |
 | POST | `/api/v1/admin/users` | Super Owner | Creates a user. Body: `{ name, email, password, role, aiDailyQuota }`. |
 | PATCH | `/api/v1/admin/users/:id` | Super Owner | Updates role/status/`aiDailyQuota` (partial body allowed). |
@@ -44,7 +47,7 @@ Every API response uses:
 | POST | `/api/v1/admin/site-settings/favicon` | Super Owner | Multipart upload of the site favicon (JPG/PNG/GIF/WebP, ≤ 2 MB; returns `{ faviconUrl }`). The browser tab icon updates immediately. |
 | DELETE | `/api/v1/admin/site-settings/favicon` | Super Owner | Removes the favicon so browsers fall back to the bundled default SVG (returns `{ faviconUrl: null }`). |
 
-Error-code constants are defined in `backend/internal/contracts/errors.go` and follow `<FEATURE><SUBSET><ERROR>` (e.g. `AISY02001` queue full, `AISY02002` rate limited, `AISY02003` daily quota exceeded, `AISY03002` URL blocked, `AISY03003` invalid URL, `AISY03004` crawl failed, `AISY01001/2/3` provider unavailable/timeout/error). Auth uses `AUTH01001` (invalid credentials), `AUTH01002` (invalid/expired session), `AUTH01003` (Google sign-in unavailable/failed), `AUTH02001` (super-owner required). Admin panel errors use `ADMN01001` (user ops), `ADMN02001` (statistics), `ADMN03001/2` (providers), `ADMN04001` (queue), `ADMN05001/2` (site settings/logo), `ADMN05003` (favicon upload).
+Error-code constants are defined in `backend/internal/contracts/errors.go` and follow `<FEATURE><SUBSET><ERROR>` (e.g. `AISY02001` queue full, `AISY02002` rate limited, `AISY02003` daily quota exceeded, `AISY03002` URL blocked, `AISY03003` invalid URL, `AISY03004` crawl failed, `AISY01001/2/3` provider unavailable/timeout/error). Auth uses `AUTH01001` (invalid credentials), `AUTH01002` (invalid/expired session), `AUTH01003` (Google sign-in unavailable/failed), `AUTH02001` (super-owner required). Account endpoints use `USER03001` (history load failed) and `USER03002` (history clear failed). Admin panel errors use `ADMN01001` (user ops), `ADMN02001` (statistics), `ADMN03001/2` (providers), `ADMN04001` (queue), `ADMN05001/2` (site settings/logo), `ADMN05003` (favicon upload).
 
 ### AI pipeline behavior
 

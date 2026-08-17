@@ -6,7 +6,8 @@ import AppHeader from '../components/AppHeader.vue'
 import { useSiteStore } from '../stores/site'
 import { useAuthStore } from '../stores/auth'
 import { useToastStore } from '../stores/toast'
-import { getMe, updateMe, uploadAvatar, type MeResponse } from '../services/api'
+import { getHistory, clearHistory, getMe, updateMe, uploadAvatar, type HistoryItem, type MeResponse } from '../services/api'
+import ConfirmModal from '../components/ConfirmModal.vue'
 import { useRouter } from 'vue-router'
 
 const site = useSiteStore(); site.load()
@@ -19,10 +20,39 @@ const notSignedIn = ref(false)
 const saving = ref(false)
 const name = ref(''); const email = ref('')
 const fileInput = ref<HTMLInputElement | null>(null); const uploading = ref(false)
+const history = ref<HistoryItem[]>([])
+const historyLoading = ref(false)
+const historyError = ref(false)
+const clearingHistory = ref(false)
+const confirmClear = ref(false)
 
 async function load() {
   loading.value = true
   try { me.value = await getMe(); name.value = me.value.name; email.value = me.value.email } catch { notSignedIn.value = true } finally { loading.value = false }
+}
+async function loadHistory() {
+  historyLoading.value = true
+  historyError.value = false
+  try { history.value = (await getHistory(50)).items } catch { historyError.value = true } finally { historyLoading.value = false }
+}
+async function clearAllHistory() {
+  clearingHistory.value = true
+  try {
+    await clearHistory()
+    history.value = []
+    confirmClear.value = false
+    toast.success('Search history cleared.')
+  } catch (e) { toast.error((e as Error).message) } finally { clearingHistory.value = false }
+}
+function timeAgo(iso: string): string {
+  const seconds = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
+  if (seconds < 60) return 'just now'
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.round(hours / 24)
+  return `${days}d ago`
 }
 async function saveProfile() {
   if (!name.value.trim() || !email.value.trim()) return
@@ -44,7 +74,7 @@ async function pickAvatar(file?: File) {
     toast.success('Avatar updated.')
   } catch (e) { toast.error((e as Error).message) } finally { uploading.value = false; if (fileInput.value) fileInput.value.value = '' }
 }
-onMounted(() => { if (auth.token) load(); else notSignedIn.value = true })
+onMounted(() => { if (auth.token) { load(); loadHistory() } else notSignedIn.value = true })
 </script>
 <template>
   <main class="page-shell account-page">
@@ -83,7 +113,24 @@ onMounted(() => { if (auth.token) load(); else notSignedIn.value = true })
             <div class="modal-submit-row"><button class="base-button button-primary" :disabled="saving" @click="saveProfile">{{ saving ? 'Saving…' : 'Save profile' }}</button></div>
           </div>
         </section>
+
+        <section class="settings-card">
+          <div class="setting-title">
+            <div><div class="section-label">History</div><h2>Recent searches</h2><p>Your past questions, used to show recent searches and compose suggestions on the main page.</p></div>
+            <button v-if="history.length" class="base-button button-secondary" @click="confirmClear = true">Clear history</button>
+          </div>
+          <div v-if="historyLoading" class="admin-loading"><span class="spinner"></span></div>
+          <p v-else-if="historyError" class="history-note">Couldn't load your search history.</p>
+          <p v-else-if="!history.length" class="history-note">No searches yet — your past questions will appear here.</p>
+          <ul v-else class="history-list">
+            <li v-for="item in history" :key="item.id" class="history-item">
+              <span class="history-query" :title="item.query">{{ item.query }}</span>
+              <span class="history-time">{{ timeAgo(item.createdAt) }}</span>
+            </li>
+          </ul>
+        </section>
       </template>
+      <ConfirmModal v-if="confirmClear" :open="true" title="Clear search history" message="This permanently removes all of your past searches and the suggestions based on them." confirm-label="Clear history" :busy="clearingHistory" @close="confirmClear = false" @confirm="clearAllHistory" />
     </section>
   </main>
 </template>
@@ -97,4 +144,11 @@ onMounted(() => { if (auth.token) load(); else notSignedIn.value = true })
 .avatar-upload-copy strong { font-size: .95rem; }
 .avatar-upload-copy span { color: var(--color-muted); font-size: .82rem; }
 .profile-form { max-width: 520px; margin-top: 26px; }
+.history-note { margin: 18px 0 0; color: var(--color-muted); font-size: .85rem; }
+.history-list { display: grid; margin: 22px 0 0; padding: 0; list-style: none; }
+.history-item { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 12px 2px; border-bottom: 1px solid var(--color-border); }
+.history-item:last-child { border-bottom: 0; }
+.history-query { overflow: hidden; color: var(--color-text); font-size: .9rem; text-overflow: ellipsis; white-space: nowrap; }
+.history-time { flex-shrink: 0; color: var(--color-muted); font-size: .74rem; }
+@media (max-width: 520px) { .history-item { align-items: flex-start; flex-direction: column; gap: 2px; } }
 </style>
