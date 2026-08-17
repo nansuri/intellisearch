@@ -48,8 +48,8 @@ func TestCrawlServiceFetchPage(t *testing.T) {
 func TestCrawlServiceRejectsInternalHosts(t *testing.T) {
 	db := newTestDB(t)
 	jobs := repositories.NewCrawlJobRepository(db)
-	service := NewCrawlService("http://crawler:3000", 5000, jobs)
-	_, err := service.FetchPage(context.Background(), "http://localhost:8080/admin", nil)
+	service := NewCrawlService("http://crawler:3002", 5000, jobs)
+	_, err := service.FetchPage(context.Background(), "http://localhost:8090/admin", nil)
 	if !errors.Is(err, ErrURLBlocked) {
 		t.Fatalf("expected ErrURLBlocked, got %v", err)
 	}
@@ -64,7 +64,7 @@ func TestCrawlServiceRejectsInternalHosts(t *testing.T) {
 
 func TestCrawlServiceRejectsInvalidURL(t *testing.T) {
 	db := newTestDB(t)
-	service := NewCrawlService("http://crawler:3000", 5000, repositories.NewCrawlJobRepository(db))
+	service := NewCrawlService("http://crawler:3002", 5000, repositories.NewCrawlJobRepository(db))
 	if _, err := service.FetchPage(context.Background(), "file:///etc/passwd", nil); !errors.Is(err, ErrURLInvalid) {
 		t.Fatalf("expected ErrURLInvalid, got %v", err)
 	}

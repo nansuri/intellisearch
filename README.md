@@ -60,7 +60,7 @@ cp .env.example .env   # then edit values as needed
 ```
 
 - Frontend: http://localhost:5173
-- API: http://localhost:8080 (health: http://localhost:8080/health)
+- API: http://localhost:8088 (health: http://localhost:8088/health)
 
 The API always uses the `{ data, errorCode, errorMessage }` response envelope. Frontend variables use the `VITE_` prefix (see `.env.example`).
 

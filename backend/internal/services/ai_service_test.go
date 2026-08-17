@@ -135,7 +135,7 @@ func TestAnswerFromURLSubmission(t *testing.T) {
 
 func TestAnswerRejectsBlockedURL(t *testing.T) {
 	service, _ := newAITestEnv(t, false)
-	_, err := service.Answer(context.Background(), AskInput{Query: "Summarize this page", URL: "http://localhost:8080/admin"})
+	_, err := service.Answer(context.Background(), AskInput{Query: "Summarize this page", URL: "http://localhost:8090/admin"})
 	if !errors.Is(err, ErrURLBlocked) {
 		t.Fatalf("expected ErrURLBlocked, got %v", err)
 	}

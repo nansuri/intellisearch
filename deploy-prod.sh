@@ -44,9 +44,9 @@ docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --remove-orphans
 
 echo "-> waiting for backend health..."
 for _ in $(seq 1 60); do
-  if curl -fsS http://localhost:8080/health >/dev/null 2>&1; then
-    echo "-> backend healthy: http://localhost:8080"
-    echo "-> frontend: http://localhost:${FRONTEND_PORT:-80}"
+  if curl -fsS http://localhost:8088/health >/dev/null 2>&1; then
+    echo "-> backend healthy: http://localhost:8088"
+    echo "-> frontend: http://localhost:${FRONTEND_PORT:-8082}"
     docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps
     exit 0
   fi

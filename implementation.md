@@ -98,7 +98,7 @@ Root `.env` is the **single source** of local env values (backend, frontend, doc
 ```env
 # App
 APP_ENV=development
-PORT=8080
+PORT=8088
 CORS_ORIGINS=http://localhost:5173
 
 # PostgreSQL
@@ -132,15 +132,15 @@ AI_MODEL=llama3.2
 # Search & crawler
 SEARXNG_BASE_URL=http://searxng:8080
 SEARXNG_TIMEOUT_MS=10000
-CRAWLER_BASE_URL=http://crawler:3000
+CRAWLER_BASE_URL=http://crawler:3002
 CRAWLER_TIMEOUT_MS=15000
 CRAWL_TOP_N=3                              # top N source pages deep-read per query
 
 # Frontend (used by Vite build)
-VITE_API_BASE_URL=/api/v1                  # same-origin via nginx proxy in prod; http://localhost:8080/api/v1 in dev
+VITE_API_BASE_URL=/api/v1                  # same-origin via nginx proxy in prod; http://localhost:8088/api/v1 in dev
 ```
 
-- `run-local.sh`: starts Redis with Podman, uses SQLite for the host-run API, and prints the URLs (frontend :5173, API :8080/health).
+- `run-local.sh`: starts Redis with Podman, uses SQLite for the host-run API, and prints the URLs (frontend :5173, API :8088/health).
 - `deploy-prod.sh`: `docker compose -f docker-compose.prod.yml up -d --build`, then poll `GET /health` until it returns `{ "data": { "status": "ok" } }`; fail loudly otherwise.
 - Both scripts read the root `.env` (docker compose does automatically for `${VAR}` interpolation).
 
@@ -156,7 +156,7 @@ Module name: `intellisearch` (adjustable). Go 1.22+. Dependencies: `gin-gonic/gi
 2. Init Logrus (JSON formatter; level from `APP_ENV`).
 3. Connect GORM → the configured SQLite or PostgreSQL driver; run `AutoMigrate` for every entity in §4.4; seed singleton rows + super owner (§4.4.3).
 4. Connect Redis.
-5. Build repositories, services, the AI worker pool (§4.7), handlers, router; start `:8080` (graceful shutdown on SIGTERM/SIGINT).
+5. Build repositories, services, the AI worker pool (§4.7), handlers, router; start `:8088` (graceful shutdown on SIGTERM/SIGINT).
 
 ### 4.2 Contracts (`internal/contracts`)
 
@@ -315,7 +315,7 @@ Validation: Gin binding + explicit checks in services. Every failure → Logrus 
 
 ## 6. Frontend (Vue 3 + TypeScript + Vite)
 
-Scaffold with `npm create vite@latest frontend -- --template vue-ts`. Add `vue-router@4`, `pinia`. Dev proxy in `vite.config.ts`: `/api` → `http://localhost:8080` (so `VITE_API_BASE_URL=/api/v1` works locally too).
+Scaffold with `npm create vite@latest frontend -- --template vue-ts`. Add `vue-router@4`, `pinia`. Dev proxy in `vite.config.ts`: `/api` → `http://localhost:8088` (so `VITE_API_BASE_URL=/api/v1` works locally too).
 
 ### 6.1 Design tokens & theming
 
@@ -370,10 +370,10 @@ Views per PRD mockups (§4.1–§4.6 of the PRD):
 
 ## 7. Docker & deployment
 
-- **docker-compose.yml** services: `postgres`, `redis`, `searxng` (`searxng/searxng`, volume for `settings.yml`; enable `search.formats: [html, json]`), `crawler`, `api` (backend Dockerfile), `frontend` (nginx serving dist + proxying `/api` → api:8080), optional `ollama` (commented, for local LLM).
+- **docker-compose.yml** services: `postgres`, `redis`, `searxng` (`searxng/searxng`, volume for `settings.yml`; enable `search.formats: [html, json]`), `crawler`, `api` (backend Dockerfile), `frontend` (nginx serving dist + proxying `/api` → api:8088), optional `ollama` (commented, for local LLM).
 - All services on one internal network; only `frontend` (and optionally `api`) expose ports to the host. `searxng`, `crawler`, `postgres`, `redis` are **not** exposed publicly.
 - **backend/Dockerfile**: multi-stage `golang:1.22` build → slim runtime; non-root user.
-- **frontend/Dockerfile**: `node` build (with `VITE_API_BASE_URL=/api/v1`) → `nginx:alpine`; nginx config proxies `/api/` to `api:8080`.
+- **frontend/Dockerfile**: `node` build (with `VITE_API_BASE_URL=/api/v1`) → `nginx:alpine`; nginx config proxies `/api/` to `api:8088`.
 - **docker-compose.prod.yml**: same stack, `restart: unless-stopped`, prod env from root `.env`, no dev volumes.
 - `deploy-prod.sh` gates on `/health` (§3).
 

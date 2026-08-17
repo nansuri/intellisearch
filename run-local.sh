@@ -24,7 +24,7 @@ source "$ROOT/.env"
 set +a
 
 export APP_ENV="${APP_ENV:-development}"
-export PORT="${PORT:-8080}"
+export PORT="${PORT:-8088}"
 export CORS_ORIGINS="${CORS_ORIGINS:-http://localhost:5173}"
 # Host-run development uses local Redis + SearXNG + crawler containers and SQLite.
 export REDIS_ADDR="127.0.0.1:6379"
@@ -63,7 +63,7 @@ if ! podman exec "$REDIS_CONTAINER" redis-cli ping 2>/dev/null | grep -q PONG; t
 fi
 
 # SearXNG (self-hosted metasearch) — host port 8081 -> container port 8080 so it
-# never collides with the API's :8080. The JSON format is enabled in
+# never collides with the API's :8088. The JSON format is enabled in
 # searxng/settings.yml (search.formats: [html, json]).
 if [[ -n "$(podman ps -q -f "name=^/${SEARXNG_CONTAINER}$")" ]]; then
   echo "-> SearXNG is already running ($SEARXNG_CONTAINER)"
@@ -91,7 +91,7 @@ if [[ "$SEARXNG_READY" != "1" ]]; then
 fi
 echo "-> SearXNG ready on http://localhost:8081"
 
-# Crawler (Playwright page fetcher) — host port 3001 -> container port 3000.
+# Crawler (Playwright page fetcher) — host port 3001 -> container port 3002.
 # The image is built from crawler/ (Playwright base image + npm ci). Building it
 # the first time pulls the Playwright base image and can take a few minutes.
 if ! podman image exists "$CRAWLER_IMAGE" >/dev/null 2>&1; then
@@ -106,7 +106,7 @@ elif [[ -n "$(podman ps -aq -f "name=^/${CRAWLER_CONTAINER}$")" ]]; then
   CRAWLER_STARTED_BY_SCRIPT=1
 else
   echo "-> creating local crawler container ($CRAWLER_CONTAINER)"
-  podman run -d --name "$CRAWLER_CONTAINER" -p 3001:3000 "$CRAWLER_IMAGE" >/dev/null
+  podman run -d --name "$CRAWLER_CONTAINER" -p 3001:3002 "$CRAWLER_IMAGE" >/dev/null
   CRAWLER_STARTED_BY_SCRIPT=1
 fi
 

@@ -22,4 +22,4 @@ app.post('/fetch', async (req, res) => {
   catch (error) { const status = error.message === 'invalid' ? 400 : error.message === 'blocked' ? 403 : 502; res.status(status).json({ error: status === 403 ? 'url is blocked' : 'page fetch failed' }) }
   finally { await browser?.close() }
 })
-app.listen(process.env.PORT || 3000, () => console.log('crawler listening'))
+app.listen(process.env.PORT || 3002, () => console.log('crawler listening'))

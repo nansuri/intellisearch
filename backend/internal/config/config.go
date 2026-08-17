@@ -24,7 +24,7 @@ type Config struct {
 
 func Load() Config {
 	return Config{
-		Port: env("PORT", "8080"), AppEnv: env("APP_ENV", "development"),
+		Port: env("PORT", "8088"), AppEnv: env("APP_ENV", "development"),
 		CORSOrigins:     env("CORS_ORIGINS", "http://localhost:5173"),
 		JWTSecret:       env("JWT_SECRET", "change-me-32-chars-min"),
 		JWTTTLHours:     envInt("JWT_TTL_HOURS", 24),
@@ -38,7 +38,7 @@ func Load() Config {
 		AIModel: env("AI_MODEL", "llama3.2"), OpenAIBaseURL: env("OPENAI_BASE_URL", ""), OpenAIAPIKey: env("OPENAI_API_KEY", ""),
 		SearXNGBaseURL: env("SEARXNG_BASE_URL", "http://localhost:8081"), SearXNGTimeoutMS: envInt("SEARXNG_TIMEOUT_MS", 10000),
 		NominatimBaseURL: env("NOMINATIM_BASE_URL", "https://nominatim.openstreetmap.org"), NominatimTimeoutMS: envInt("NOMINATIM_TIMEOUT_MS", 5000),
-		CrawlerBaseURL: env("CRAWLER_BASE_URL", "http://localhost:3000"), CrawlerTimeoutMS: envInt("CRAWLER_TIMEOUT_MS", 15000),
+		CrawlerBaseURL: env("CRAWLER_BASE_URL", "http://localhost:3002"), CrawlerTimeoutMS: envInt("CRAWLER_TIMEOUT_MS", 15000),
 		CrawlTopN: envInt("CRAWL_TOP_N", 3),
 		UploadsDir: env("UPLOADS_DIR", "./uploads"),
 		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
