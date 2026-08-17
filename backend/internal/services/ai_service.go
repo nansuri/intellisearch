@@ -43,19 +43,31 @@ type AskInput struct {
 	URL       string     // non-empty for URL-submission asks
 	IP        string     // fallback identity for anonymous rate limiting
 	Location  *GeoLocation
-	Mode      string     // ModeEnhanced (default) or ModeSearch
+	Mode      string // ModeEnhanced (default) or ModeSearch
+}
+
+// MapPoint is a map marker: position 0 is the map center (the user's
+// location, reverse-geocoded to a label) and positions 1..N are nearby
+// results geocoded from the top source titles.
+type MapPoint struct {
+	Label     string  `json:"label"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
 }
 
 // AskResult is the envelope payload returned to the client. VisitorID is set
 // only for anonymous callers on their first (allowed) ask, so the frontend can
-// persist the issued guest token.
+// persist the issued guest token. MapCenter/MapMarkers are only populated for
+// location-aware asks ("near me") where the user shared their position.
 type AskResult struct {
-	SessionID uuid.UUID   `json:"sessionId"`
-	MessageID uuid.UUID   `json:"messageId"`
-	Answer    string      `json:"answer"`
-	Sources   []SourceItem `json:"sources"`
-	Images    []ImageItem  `json:"images"`
-	VisitorID *uuid.UUID  `json:"visitorId,omitempty"`
+	SessionID  uuid.UUID    `json:"sessionId"`
+	MessageID  uuid.UUID    `json:"messageId"`
+	Answer     string       `json:"answer"`
+	Sources    []SourceItem `json:"sources"`
+	Images     []ImageItem  `json:"images"`
+	MapCenter  *MapPoint    `json:"mapCenter,omitempty"`
+	MapMarkers []MapPoint   `json:"mapMarkers,omitempty"`
+	VisitorID  *uuid.UUID   `json:"visitorId,omitempty"`
 }
 
 // AIService runs the full ask pipeline: persist session/messages/usage logs,
@@ -67,7 +79,7 @@ type AIService struct {
 	providers   *repositories.ProviderRepository
 	users       *repositories.UserRepository
 	history     *repositories.SearchHistoryRepository // nil disables recording (tests)
-	queueConfig *repositories.QueueConfigRepository  // nil falls back to the default image cap
+	queueConfig *repositories.QueueConfigRepository   // nil falls back to the default image cap
 	search      *SearchService
 	crawl       *CrawlService
 	llm         *LLMService
@@ -155,11 +167,12 @@ func (s *AIService) Answer(ctx context.Context, input AskInput) (AskResult, erro
 	images := []ImageItem{}
 	var promptSources []string
 	locationNote := ""
+	placeLabel := ""
 	if input.URL != "" {
 		promptSources, err = s.collectFromURL(ctx, input, &usageLog)
 	} else {
 		var searchQuery string
-		searchQuery, locationNote = BuildLocationContext(ctx, s.geo, query, input.Location)
+		searchQuery, locationNote, placeLabel = BuildLocationContext(ctx, s.geo, query, input.Location)
 		// Search-only mode skips the deep-read (no crawler work). Follow-up asks
 		// (reusing a session) skip the image search too, so only the primary
 		// search of a thread fetches images.
@@ -167,6 +180,24 @@ func (s *AIService) Answer(ctx context.Context, input AskInput) (AskResult, erro
 	}
 	if err != nil {
 		return fail(err)
+	}
+
+	// Location-aware asks ("hospital near me") with a shared position also get
+	// a map: the user's location as the center plus nearby results geocoded
+	// from the top source titles. Best-effort — a geocoding failure only means
+	// fewer markers, never a failed ask.
+	if input.Location != nil && NeedsLocationContext(query) && placeLabel != "" {
+		center, markers := s.buildMapData(ctx, *input.Location, placeLabel, sources)
+		result.MapCenter = &center
+		result.MapMarkers = markers
+		rows := make([]entities.MapPoint, 0, len(markers)+1)
+		rows = append(rows, entities.MapPoint{MessageID: assistantMessage.ID, Position: 0, Label: center.Label, Latitude: center.Latitude, Longitude: center.Longitude})
+		for index, marker := range markers {
+			rows = append(rows, entities.MapPoint{MessageID: assistantMessage.ID, Position: index + 1, Label: marker.Label, Latitude: marker.Latitude, Longitude: marker.Longitude})
+		}
+		if err := s.messages.CreateMapPoints(rows); err != nil {
+			logrus.WithError(err).Warn("map points persist failed; continuing without them")
+		}
 	}
 
 	// "Ask" (search mode) stops here: no LLM synthesis and no deep-read — the
@@ -185,7 +216,7 @@ func (s *AIService) Answer(ctx context.Context, input AskInput) (AskResult, erro
 		return result, nil
 	}
 
-	system := "You are a research assistant. Answer the question concisely and accurately. Format your answer in Markdown so it renders well: use short headings, bullet lists, and bold highlights where they help readability, and use emoji sparingly to make key points stand out. When you use information from the provided sources, cite them inline as [1], [2], etc., matching the numbered source list. If a source includes a relevant image, you may embed it with markdown image syntax. If no sources are provided, answer from general knowledge and note that you could not find web sources."
+	system := "You are a research assistant. Answer the question concisely and accurately. Format your answer in Markdown so it renders well: use short headings, bullet lists, and bold highlights where they help readability, and use emoji sparingly to make key points stand out. When you use information from the provided sources, cite them inline as [1], [2], etc., matching the numbered source list. If a source includes a relevant image, you may embed it with markdown image syntax. If no sources are provided, answer from general knowledge and note that you could not find web sources.\n\nYou can also generate visuals inside your answer — no image files needed, they render directly:\n- Diagrams, flowcharts, UML, sequence diagrams, timelines, and charts: use a fenced code block tagged mermaid (for example: mermaid flowchart TD ... with the fences).\n- Simple charts and art: use ASCII art inside a plain fenced code block, or a Markdown table.\nUse these whenever a chart or diagram makes the answer clearer (e.g. comparing options, showing a flow, architecture, or process)."
 	userPrompt := query
 	if locationNote != "" {
 		userPrompt += "\n\n[Location context: " + locationNote + "]"
@@ -307,6 +338,78 @@ func (s *AIService) collectFromSearch(ctx context.Context, query string, message
 		}
 	}
 	return items, promptSources, images, nil
+}
+
+// buildMapData builds the map center (the user's location with its
+// reverse-geocoded label) and geocodes the top source titles into nearby
+// markers. Best-effort: geocoding failures and out-of-range results are
+// dropped, and a total failure still yields the center so the frontend can
+// render a map of the user's area. The radius (100 km) keeps "hospital near
+// me" markers plausibly near the user instead of geocoding a listicle title
+// to a faraway city.
+func (s *AIService) buildMapData(ctx context.Context, location GeoLocation, placeLabel string, sources []SourceItem) (MapPoint, []MapPoint) {
+	center := MapPoint{Label: placeLabel, Latitude: location.Latitude, Longitude: location.Longitude}
+	if s.geo == nil || len(sources) == 0 {
+		return center, nil
+	}
+	const (
+		maxGeocode   = 5
+		maxMarkers   = 6
+		maxRadiusKM  = 100.0
+		geocodeLimit = 1
+	)
+	titles := make([]string, 0, maxGeocode)
+	for _, source := range sources {
+		titles = append(titles, source.Title)
+		if len(titles) == maxGeocode {
+			break
+		}
+	}
+	gctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	type geocodeResult struct {
+		point GeocodePoint
+		err   error
+	}
+	results := make([]geocodeResult, len(titles))
+	var wg sync.WaitGroup
+	for index, title := range titles {
+		wg.Add(1)
+		go func(index int, title string) {
+			defer wg.Done()
+			points, err := s.geo.Geocode(gctx, title, geocodeLimit)
+			if err != nil {
+				results[index] = geocodeResult{err: err}
+				return
+			}
+			if len(points) > 0 {
+				results[index] = geocodeResult{point: points[0]}
+			}
+		}(index, title)
+	}
+	wg.Wait()
+
+	markers := make([]MapPoint, 0, maxMarkers)
+	seen := make(map[string]bool, maxMarkers)
+	for _, result := range results {
+		if result.err != nil {
+			continue
+		}
+		point := result.point
+		if haversineKM(location, GeoLocation{Latitude: point.Latitude, Longitude: point.Longitude}) > maxRadiusKM {
+			continue
+		}
+		key := fmt.Sprintf("%.3f,%.3f", point.Latitude, point.Longitude)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		markers = append(markers, MapPoint{Label: point.Label, Latitude: point.Latitude, Longitude: point.Longitude})
+		if len(markers) == maxMarkers {
+			break
+		}
+	}
+	return center, markers
 }
 
 // buildSearchSummary composes a non-AI, extractive summary from the top

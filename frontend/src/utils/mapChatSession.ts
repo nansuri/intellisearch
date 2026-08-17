@@ -1,11 +1,21 @@
-import type { ChatSession, ImageItem, Source } from '../services/api'
+import type { ChatSession, ImageItem, MapPoint, Source } from '../services/api'
 import type { FollowUpEntry } from '../components/FollowUpBlock.vue'
+
+/** Splits persisted map points (position 0 = center) into center + markers. */
+function splitMapPoints(points: MapPoint[] | undefined): { center: MapPoint | null; markers: MapPoint[] } {
+  const list = points || []
+  const center = list.find((point) => (point as MapPoint & { position?: number }).position === 0) ?? null
+  const markers = list.filter((point) => (point as MapPoint & { position?: number }).position !== 0)
+  return { center, markers }
+}
 
 /** Maps a stored chat session into result-page state. */
 export function mapChatSession(session: ChatSession): {
   answer: string
   sources: Source[]
   images: ImageItem[]
+  mapCenter: MapPoint | null
+  mapMarkers: MapPoint[]
   thread: FollowUpEntry[]
   followUpSeq: number
 } {
@@ -13,6 +23,8 @@ export function mapChatSession(session: ChatSession): {
   let answer = ''
   let sources: Source[] = []
   let images: ImageItem[] = []
+  let mapCenter: MapPoint | null = null
+  let mapMarkers: MapPoint[] = []
   const thread: FollowUpEntry[] = []
   let followUpSeq = 0
 
@@ -22,10 +34,13 @@ export function mapChatSession(session: ChatSession): {
     const assistant = completed[index + 1]
     if (assistant.role !== 'assistant') continue
 
+    const entryMap = splitMapPoints(assistant.mapPoints)
     if (!answer) {
       answer = assistant.content
       sources = assistant.sources || []
       images = assistant.images || []
+      mapCenter = entryMap.center
+      mapMarkers = entryMap.markers
     } else {
       followUpSeq += 1
       thread.push({
@@ -34,6 +49,8 @@ export function mapChatSession(session: ChatSession): {
         answer: assistant.content,
         sources: assistant.sources || [],
         images: assistant.images || [],
+        mapCenter: entryMap.center,
+        mapMarkers: entryMap.markers,
         error: null,
         loading: false,
         collapsed: false,
@@ -43,5 +60,5 @@ export function mapChatSession(session: ChatSession): {
     index += 1
   }
 
-  return { answer, sources, images, thread, followUpSeq }
+  return { answer, sources, images, mapCenter, mapMarkers, thread, followUpSeq }
 }

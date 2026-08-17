@@ -43,7 +43,7 @@ func adminTestMux(t *testing.T) (*httptest.Server, *gorm.DB) {
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&entities.User{}, &entities.SiteSettings{}, &entities.AIQueueConfig{}, &entities.AIProvider{}, &entities.ChatSession{}, &entities.Message{}, &entities.SearchResult{}, &entities.ImageResult{}, &entities.UsageLog{}, &entities.CrawlJob{}, &entities.SearchHistory{}, &entities.AnonymousUsage{}, &entities.Note{}); err != nil {
+	if err := db.AutoMigrate(&entities.User{}, &entities.SiteSettings{}, &entities.AIQueueConfig{}, &entities.AIProvider{}, &entities.ChatSession{}, &entities.Message{}, &entities.SearchResult{}, &entities.ImageResult{}, &entities.UsageLog{}, &entities.CrawlJob{}, &entities.SearchHistory{}, &entities.AnonymousUsage{}, &entities.Note{}, &entities.MapPoint{}); err != nil {
 		t.Fatal(err)
 	}
 	seed := func(user *entities.User, password string) {

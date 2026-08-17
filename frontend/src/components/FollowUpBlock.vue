@@ -3,7 +3,7 @@ import { nextTick, onMounted, ref, watch } from 'vue'
 import ErrorBanner from './ErrorBanner.vue'
 import FollowUpLoading from './FollowUpLoading.vue'
 import CollapsibleAnswer from './CollapsibleAnswer.vue'
-import type { ImageItem, Source } from '../services/api'
+import type { ImageItem, MapPoint, Source } from '../services/api'
 
 export type FollowUpEntry = {
   id: number
@@ -11,6 +11,8 @@ export type FollowUpEntry = {
   answer: string
   sources: Source[]
   images: ImageItem[]
+  mapCenter?: MapPoint | null
+  mapMarkers?: MapPoint[]
   error: string | null
   loading: boolean
   collapsed: boolean
@@ -68,6 +70,8 @@ defineExpose({ scrollToBlock })
         :query="entry.question"
         :collapsed="entry.collapsed"
         :highlighted="entry.highlighted"
+        :map-center="entry.mapCenter ?? null"
+        :map-markers="entry.mapMarkers || []"
         :empty-label="searchOnly ? 'No web results to summarize.' : undefined"
         compact
         class="follow-up-answer"

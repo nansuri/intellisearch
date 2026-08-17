@@ -287,6 +287,84 @@ func TestAnswerCapsImageResults(t *testing.T) {
 	}
 }
 
+// TestAnswerBuildsMapDataForLocationAsks verifies that a "near me" query with
+// a shared position geocodes the top source titles into map markers, returns
+// center + markers, and persists them against the assistant message.
+func TestAnswerBuildsMapDataForLocationAsks(t *testing.T) {
+	service, db, _ := newAITestEnv(t, false)
+	// Give the service a geocoder: /reverse returns the place label, /search
+	// returns one nearby point per source title.
+	geoServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/reverse":
+			_, _ = w.Write([]byte(`{"display_name":"Jakarta, Indonesia","address":{"city":"Jakarta","country":"Indonesia"}}`))
+		case "/search":
+			_, _ = w.Write([]byte(`[{"display_name":"St Mary's Hospital, Jakarta","lat":"-6.2","lon":"106.8"}]`))
+		default:
+			t.Fatalf("unexpected geo path %s", r.URL.Path)
+		}
+	}))
+	t.Cleanup(geoServer.Close)
+	service.geo = NewGeoService(geoServer.URL, "test/1.0", 2000)
+
+	location := GeoLocation{Latitude: -6.2, Longitude: 106.8}
+	result, err := service.Answer(context.Background(), AskInput{Query: "hospital near me", Location: &location})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.MapCenter == nil || result.MapCenter.Label != "Jakarta, Indonesia" {
+		t.Fatalf("expected a map center with the place label, got %#v", result.MapCenter)
+	}
+	if len(result.MapMarkers) != 1 || result.MapMarkers[0].Latitude != -6.2 {
+		t.Fatalf("expected one nearby marker, got %#v", result.MapMarkers)
+	}
+	var points []entities.MapPoint
+	if err := db.Where("message_id = ?", result.MessageID).Order("position asc").Find(&points).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(points) != 2 || points[0].Position != 0 || points[1].Position != 1 {
+		t.Fatalf("expected center + marker persisted, got %#v", points)
+	}
+}
+
+// TestAnswerSkipsMapWithoutLocation verifies that non-location asks never
+// produce map data, and location asks without a shared position don't either.
+func TestAnswerSkipsMapWithoutLocation(t *testing.T) {
+	service, _, _ := newAITestEnv(t, false)
+	result, err := service.Answer(context.Background(), AskInput{Query: "hospital near me"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.MapCenter != nil || len(result.MapMarkers) != 0 {
+		t.Fatalf("expected no map without a shared location, got %#v", result.MapCenter)
+	}
+	result, err = service.Answer(context.Background(), AskInput{Query: "what is the capital of france"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.MapCenter != nil || len(result.MapMarkers) != 0 {
+		t.Fatalf("expected no map for a non-location query, got %#v", result.MapCenter)
+	}
+}
+
+// TestBuildMapDataDropsFarMarkers verifies the radius filter keeps geocoded
+// markers plausibly near the user and dedupes repeated coordinates.
+func TestBuildMapDataDropsFarMarkers(t *testing.T) {
+	geoServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`[{"display_name":"Far Away","lat":"40.7128","lon":"-74.0060"}]`))
+	}))
+	t.Cleanup(geoServer.Close)
+	geo := NewGeoService(geoServer.URL, "test/1.0", 2000)
+	service := &AIService{geo: geo}
+	center, markers := service.buildMapData(t.Context(), GeoLocation{Latitude: -6.2, Longitude: 106.8}, "Jakarta", []SourceItem{{Title: "NYC Hospital"}})
+	if center.Label != "Jakarta" {
+		t.Fatalf("unexpected center %#v", center)
+	}
+	if len(markers) != 0 {
+		t.Fatalf("expected NYC marker dropped (outside 100km), got %#v", markers)
+	}
+}
+
 // TestAnswerSkipsImagesOnFollowUp verifies follow-up asks (reusing a session)
 // do not fetch or persist a second set of images — only the primary search of
 // a thread gets the image grid.

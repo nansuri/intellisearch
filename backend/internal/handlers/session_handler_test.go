@@ -33,6 +33,9 @@ func TestSessionGetIncludesSourcesAndImages(t *testing.T) {
 	if err := messageRepo.CreateImages([]entities.ImageResult{{MessageID: messageID, Position: 1, Title: "img", URL: "https://example.com/p", ThumbnailURL: "https://example.com/t.jpg", Source: "example.com", Width: 640, Height: 480}}); err != nil {
 		t.Fatal(err)
 	}
+	if err := messageRepo.CreateMapPoints([]entities.MapPoint{{MessageID: messageID, Position: 0, Label: "center", Latitude: -6.2, Longitude: 106.8}, {MessageID: messageID, Position: 1, Label: "marker", Latitude: -6.1, Longitude: 106.7}}); err != nil {
+		t.Fatal(err)
+	}
 
 	handler := NewSessionHandler(sessionRepo, messageRepo, nil)
 	w := httptest.NewRecorder()
@@ -48,8 +51,9 @@ func TestSessionGetIncludesSourcesAndImages(t *testing.T) {
 	var envelope struct {
 		Data struct {
 			Messages []struct {
-				Sources []json.RawMessage `json:"sources"`
-				Images  []json.RawMessage `json:"images"`
+				Sources   []json.RawMessage `json:"sources"`
+				Images    []json.RawMessage `json:"images"`
+				MapPoints []json.RawMessage `json:"mapPoints"`
 			} `json:"messages"`
 		} `json:"data"`
 	}
@@ -60,7 +64,7 @@ func TestSessionGetIncludesSourcesAndImages(t *testing.T) {
 		t.Fatalf("expected 1 message, got %d", len(envelope.Data.Messages))
 	}
 	message := envelope.Data.Messages[0]
-	if len(message.Sources) != 1 || len(message.Images) != 1 {
-		t.Fatalf("expected sources and images on the assistant message, got sources=%d images=%d", len(message.Sources), len(message.Images))
+	if len(message.Sources) != 1 || len(message.Images) != 1 || len(message.MapPoints) != 2 {
+		t.Fatalf("expected sources, images, and map points on the assistant message, got sources=%d images=%d mapPoints=%d", len(message.Sources), len(message.Images), len(message.MapPoints))
 	}
 }

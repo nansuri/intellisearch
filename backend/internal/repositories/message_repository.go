@@ -1,9 +1,9 @@
 package repositories
 
 import (
-	"intellisearch/internal/models/entities"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"intellisearch/internal/models/entities"
 )
 
 type MessageRepository struct{ db *gorm.DB }
@@ -34,6 +34,17 @@ func (r *MessageRepository) Images(messageID uuid.UUID) ([]entities.ImageResult,
 	var images []entities.ImageResult
 	err := r.db.Where("message_id = ?", messageID).Order("position asc").Find(&images).Error
 	return images, err
+}
+func (r *MessageRepository) CreateMapPoints(points []entities.MapPoint) error {
+	if len(points) == 0 {
+		return nil
+	}
+	return r.db.Create(&points).Error
+}
+func (r *MessageRepository) MapPoints(messageID uuid.UUID) ([]entities.MapPoint, error) {
+	var points []entities.MapPoint
+	err := r.db.Where("message_id = ?", messageID).Order("position asc").Find(&points).Error
+	return points, err
 }
 
 // Summaries returns the content of the given messages keyed by message ID,

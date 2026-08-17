@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import MarkdownView from './MarkdownView.vue'
+import MapCard from './MapCard.vue'
 import WebResultList from './WebResultList.vue'
 import { answerPreview } from '../utils/answerSummary'
-import type { Source } from '../services/api'
+import type { MapPoint, Source } from '../services/api'
 
 const props = withDefaults(defineProps<{
   label: string
@@ -15,6 +16,8 @@ const props = withDefaults(defineProps<{
   showSources?: boolean
   compact?: boolean
   emptyLabel?: string
+  mapCenter?: MapPoint | null
+  mapMarkers?: MapPoint[]
 }>(), {
   sources: () => [],
   query: '',
@@ -23,6 +26,8 @@ const props = withDefaults(defineProps<{
   showSources: true,
   compact: false,
   emptyLabel: 'No answer yet. Try asking again.',
+  mapCenter: null,
+  mapMarkers: () => [],
 })
 
 const emit = defineEmits<{ 'update:collapsed': [value: boolean] }>()
@@ -65,6 +70,8 @@ function collapse() { emit('update:collapsed', true) }
       </div>
       <MarkdownView v-if="answer" :content="answer" />
       <p v-else>{{ emptyLabel }}</p>
+
+      <MapCard v-if="mapCenter || mapMarkers.length" :center="mapCenter" :markers="mapMarkers" />
 
       <WebResultList
         v-if="showSources && sources.length"

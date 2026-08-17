@@ -129,6 +129,20 @@ type SearchResult struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+// MapPoint is a persisted map marker for an assistant message: position 0 is
+// the map center (the user's location, reverse-geocoded to a label) and
+// positions 1..N are nearby results geocoded from the top source titles. It
+// lets the result page re-render the map on restore without re-geocoding.
+type MapPoint struct {
+	ID        uint64    `gorm:"primaryKey" json:"id"`
+	MessageID uuid.UUID `gorm:"type:uuid;index;not null" json:"messageId"`
+	Position  int       `gorm:"not null" json:"position"`
+	Label     string    `gorm:"not null" json:"label"`
+	Latitude  float64   `gorm:"not null" json:"latitude"`
+	Longitude float64   `gorm:"not null" json:"longitude"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 type UsageLog struct {
 	ID           uint64     `gorm:"primaryKey" json:"id"`
 	UserID       *uuid.UUID `gorm:"type:uuid;index" json:"userId,omitempty"`

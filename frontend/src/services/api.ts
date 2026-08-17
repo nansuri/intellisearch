@@ -63,8 +63,9 @@ export type ImageItem = { position: number; title: string; url: string; thumbnai
 
 export type GeoLocation = { latitude: number; longitude: number; accuracy?: number }
 export type AskMode = 'enhanced' | 'search'
-export type AskResult = { sessionId: string; messageId: string; answer: string; sources: Source[]; images?: ImageItem[]; visitorId?: string }
-export type SessionMessage = { id: string; role: 'system' | 'user' | 'assistant'; content: string; status: string; createdAt: string; sources?: Source[]; images?: ImageItem[] }
+export type MapPoint = { label: string; latitude: number; longitude: number }
+export type AskResult = { sessionId: string; messageId: string; answer: string; sources: Source[]; images?: ImageItem[]; mapCenter?: MapPoint | null; mapMarkers?: MapPoint[]; visitorId?: string }
+export type SessionMessage = { id: string; role: 'system' | 'user' | 'assistant'; content: string; status: string; createdAt: string; sources?: Source[]; images?: ImageItem[]; mapPoints?: MapPoint[] }
 
 // The anonymous guest token: issued by the backend on the first anonymous AI
 // ask (also mirrored in an httpOnly cookie). It ties a device to its single

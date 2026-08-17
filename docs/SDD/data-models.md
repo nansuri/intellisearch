@@ -65,6 +65,18 @@
 
 > SearXNG **image results** (`categories=images`), persisted per assistant message so the result page can re-render the image grid on restore. Only URLs are stored — the API never fetches third-party images server-side (no SSRF surface; the browser loads them directly). Image search is best-effort in both ask modes and never fails an ask.
 
+### map_points
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | bigserial (PK) | |
+| message_id | UUID (FK → messages) | the assistant message that searched for these places |
+| position | int | 0 = map center (the user's location), 1..N = nearby results |
+| label | varchar | reverse-geocoded place label (center) or geocoded result name |
+| latitude / longitude | double | coordinates |
+| created_at | timestamptz | |
+
+> **Map markers** for location-aware asks ("hospital near me"): the center is the user's shared position (reverse-geocoded label) and the markers are the top 5 source titles geocoded via Nominatim search, kept only when within 100 km of the user (max 6). Persisted per assistant message so the result page can re-render the interactive map (Leaflet + OSM tiles, no API key) on restore. Best-effort by design — a geocoding failure means fewer markers, never a failed ask; coordinates never appear in `usage_logs`.
+
 ### ai_providers
 | Field | Type | Notes |
 | --- | --- | --- |

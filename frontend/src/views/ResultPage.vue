@@ -8,9 +8,10 @@ import UrlAskBox from '../components/UrlAskBox.vue'
 import CollapsibleAnswer from '../components/CollapsibleAnswer.vue'
 import FollowUpBlock, { type FollowUpEntry } from '../components/FollowUpBlock.vue'
 import ImageGrid from '../components/ImageGrid.vue'
+import MapCard from '../components/MapCard.vue'
 import WebResultList from '../components/WebResultList.vue'
 import { useSiteStore } from '../stores/site'
-import { ask, askUrl, createNote, getSession, ApiError, type AskMode, type ImageItem, type Source } from '../services/api'
+import { ask, askUrl, createNote, getSession, ApiError, type AskMode, type ImageItem, type MapPoint, type Source } from '../services/api'
 import { useAuthStore } from '../stores/auth'
 import { useToastStore } from '../stores/toast'
 import { clearSearchSession } from '../composables/useSearchSession'
@@ -44,6 +45,8 @@ const guestLimitReached = ref(false)
 const answer = ref('')
 const sources = ref<Source[]>([])
 const images = ref<ImageItem[]>([])
+const mapCenter = ref<MapPoint | null>(null)
+const mapMarkers = ref<MapPoint[]>([])
 const sessionId = ref<string | null>(null)
 const elapsed = ref(0)
 const thread = ref<FollowUpEntry[]>([])
@@ -87,6 +90,8 @@ function persistState() {
     answer: answer.value,
     sources: sources.value,
     images: images.value,
+    mapCenter: mapCenter.value,
+    mapMarkers: mapMarkers.value,
     thread: thread.value
       .filter((entry) => entry.answer && !entry.loading)
       .map((entry) => ({
@@ -94,6 +99,8 @@ function persistState() {
         answer: entry.answer,
         sources: entry.sources,
         images: entry.images,
+        mapCenter: entry.mapCenter ?? null,
+        mapMarkers: entry.mapMarkers || [],
         collapsed: entry.collapsed,
       })),
     primaryCollapsed: primaryCollapsed.value,
@@ -109,6 +116,8 @@ function applyPersistedState(saved: ReturnType<typeof loadSearchSession>) {
   answer.value = saved.answer
   sources.value = saved.sources
   images.value = saved.images || []
+  mapCenter.value = saved.mapCenter ?? null
+  mapMarkers.value = saved.mapMarkers || []
   primaryCollapsed.value = saved.primaryCollapsed
   elapsed.value = saved.elapsed
   thread.value = toFollowUpEntries(saved.thread)
@@ -126,6 +135,8 @@ async function restoreFromApi(id: string): Promise<boolean> {
     answer.value = mapped.answer
     sources.value = mapped.sources
     images.value = mapped.images
+    mapCenter.value = mapped.mapCenter
+    mapMarkers.value = mapped.mapMarkers
     thread.value = mapped.thread
     followUpSeq = mapped.followUpSeq
     error.value = null
@@ -146,6 +157,8 @@ function resetState() {
   answer.value = ''
   sources.value = []
   images.value = []
+  mapCenter.value = null
+  mapMarkers.value = []
   sessionId.value = null
   elapsed.value = 0
   thread.value = []
@@ -196,6 +209,8 @@ async function runInitial() {
     answer.value = result.answer
     sources.value = result.sources || []
     images.value = result.images || []
+    mapCenter.value = result.mapCenter || null
+    mapMarkers.value = result.mapMarkers || []
     sessionId.value = result.sessionId
     elapsed.value = Math.round((performance.now() - startedAt) / 100) / 10
     persistState()
@@ -221,6 +236,8 @@ async function followUp(question: string) {
     answer: '',
     sources: [],
     images: [],
+    mapCenter: null,
+    mapMarkers: [],
     error: null,
     loading: true,
     collapsed: false,
@@ -241,6 +258,8 @@ async function followUp(question: string) {
     thread.value[index].answer = result.answer
     thread.value[index].sources = result.sources || []
     thread.value[index].images = result.images || []
+    thread.value[index].mapCenter = result.mapCenter || null
+    thread.value[index].mapMarkers = result.mapMarkers || []
     thread.value[index].loading = false
     thread.value[index].highlighted = true
     persistState()
@@ -293,6 +312,8 @@ async function submitUrl(url: string) {
     answer.value = result.answer
     sources.value = result.sources || []
     images.value = result.images || []
+    mapCenter.value = result.mapCenter || null
+    mapMarkers.value = result.mapMarkers || []
     sessionId.value = result.sessionId
     error.value = null
     primaryCollapsed.value = false
@@ -420,6 +441,8 @@ watch(
               :sources="sources"
               :query="query"
               :collapsed="primaryCollapsed"
+              :map-center="mapCenter"
+              :map-markers="mapMarkers"
               @update:collapsed="(value) => { primaryCollapsed = value; persistState() }"
             />
           </template>
@@ -440,9 +463,14 @@ watch(
               :sources="sources"
               :query="query"
               :collapsed="primaryCollapsed"
+              :map-center="mapCenter"
+              :map-markers="mapMarkers"
               @update:collapsed="(value) => { primaryCollapsed = value; persistState() }"
             />
-            <WebResultList v-else-if="sources.length" :sources="sources" :query="query" heading="Web results" />
+            <template v-else-if="sources.length">
+              <MapCard v-if="mapCenter || mapMarkers.length" :center="mapCenter" :markers="mapMarkers" />
+              <WebResultList :sources="sources" :query="query" heading="Web results" />
+            </template>
             <div v-if="!answer && !sources.length" class="empty-sources">
               <div class="empty-source-copy">
                 <h2>No web results found</h2>

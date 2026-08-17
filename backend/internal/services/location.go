@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
+	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -69,7 +72,15 @@ func EnrichQueryWithLocation(query, placeLabel string) string {
 	return strings.TrimSpace(rewritten)
 }
 
-// GeoService reverse-geocodes coordinates into a human-readable place label.
+// GeocodePoint is one geocoded place with coordinates and a display label.
+type GeocodePoint struct {
+	Label     string  `json:"label"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+}
+
+// GeoService reverse-geocodes coordinates into a human-readable place label
+// and geocodes place queries into coordinates (both via Nominatim).
 type GeoService struct {
 	baseURL    string
 	userAgent  string
@@ -153,17 +164,82 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-// BuildLocationContext returns search-query and LLM notes derived from device location.
-func BuildLocationContext(ctx context.Context, geo *GeoService, query string, location *GeoLocation) (searchQuery string, llmNote string) {
+// Geocode resolves a free-text place query to up to limit coordinates via the
+// Nominatim search endpoint. Best-effort by design: callers treat an error or
+// empty result as "no coordinates" rather than failing the whole ask.
+func (g *GeoService) Geocode(ctx context.Context, query string, limit int) ([]GeocodePoint, error) {
+	if g == nil {
+		return nil, fmt.Errorf("geo service unavailable")
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	requestURL := fmt.Sprintf("%s/search?q=%s&format=json&limit=%d&addressdetails=0", g.baseURL, url.QueryEscape(strings.TrimSpace(query)), limit)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("User-Agent", g.userAgent)
+	request.Header.Set("Accept", "application/json")
+
+	response, err := g.httpClient.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("geocode status: %d", response.StatusCode)
+	}
+
+	var payload []struct {
+		DisplayName string `json:"display_name"`
+		Lat         string `json:"lat"`
+		Lon         string `json:"lon"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		return nil, err
+	}
+	points := make([]GeocodePoint, 0, len(payload))
+	for _, item := range payload {
+		latitude, latErr := strconv.ParseFloat(item.Lat, 64)
+		longitude, lonErr := strconv.ParseFloat(item.Lon, 64)
+		if latErr != nil || lonErr != nil {
+			continue
+		}
+		points = append(points, GeocodePoint{Label: item.DisplayName, Latitude: latitude, Longitude: longitude})
+		if len(points) >= limit {
+			break
+		}
+	}
+	return points, nil
+}
+
+// haversineKM returns the great-circle distance between two coordinates in
+// kilometers, used to keep geocoded markers plausibly near the user.
+func haversineKM(a, b GeoLocation) float64 {
+	const earthRadiusKM = 6371.0
+	toRad := func(degrees float64) float64 { return degrees * math.Pi / 180 }
+	dLat := toRad(b.Latitude - a.Latitude)
+	dLon := toRad(b.Longitude - a.Longitude)
+	lat1 := toRad(a.Latitude)
+	lat2 := toRad(b.Latitude)
+	h := math.Sin(dLat/2)*math.Sin(dLat/2) + math.Cos(lat1)*math.Cos(lat2)*math.Sin(dLon/2)*math.Sin(dLon/2)
+	return 2 * earthRadiusKM * math.Asin(math.Sqrt(h))
+}
+
+// BuildLocationContext returns search-query and LLM notes derived from device
+// location, plus the human-readable place label for the user's coordinates
+// (used as the map center label). The label is "" when no valid location was
+// shared.
+func BuildLocationContext(ctx context.Context, geo *GeoService, query string, location *GeoLocation) (searchQuery string, llmNote string, placeLabel string) {
 	searchQuery = query
 	if location == nil || !ValidateGeoLocation(*location) {
 		if NeedsLocationContext(query) {
 			llmNote = "The user asked about nearby places but did not share their device location. Answer generally and suggest enabling location for better local results."
 		}
-		return searchQuery, llmNote
+		return searchQuery, llmNote, ""
 	}
 
-	placeLabel := ""
 	if geo != nil {
 		if label, err := geo.ReverseGeocode(ctx, *location); err == nil {
 			placeLabel = label
@@ -177,5 +253,5 @@ func BuildLocationContext(ctx context.Context, geo *GeoService, query string, lo
 		searchQuery = EnrichQueryWithLocation(query, placeLabel)
 		llmNote = fmt.Sprintf("The user's approximate location is %s. Prefer local, relevant results for this area when answering.", placeLabel)
 	}
-	return searchQuery, llmNote
+	return searchQuery, llmNote, placeLabel
 }

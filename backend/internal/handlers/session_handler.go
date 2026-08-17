@@ -61,6 +61,10 @@ func (h *SessionHandler) Get(c *gin.Context) {
 			if err == nil {
 				view["images"] = images
 			}
+			mapPoints, err := h.messages.MapPoints(message.ID)
+			if err == nil {
+				view["mapPoints"] = mapPoints
+			}
 		}
 		views = append(views, view)
 	}
