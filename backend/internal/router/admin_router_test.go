@@ -72,7 +72,7 @@ func adminTestMux(t *testing.T) (*httptest.Server, *gorm.DB) {
 	statsService := services.NewStatsService(repositories.NewUsageLogRepository(db), repositories.NewUserRepository(db), repositories.NewProviderRepository(db), nil)
 	aiHandler := handlers.NewAIHandler(fakeRunner{}, repositories.NewQueueConfigRepository(db), repositories.NewUserRepository(db), repositories.NewUsageLogRepository(db), allowingLimiter{}, authService)
 	defer aiHandler.Stop()
-	adminHandler := handlers.NewAdminHandler(userService, adminService, statsService)
+	adminHandler := handlers.NewAdminHandler(userService, adminService, statsService, services.NewOllamaService())
 	siteService := services.NewSiteService(repositories.NewSiteRepository(db))
 	mux := New("*", t.TempDir(), siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService, historyService), nil, aiHandler, adminHandler, authService)
 	server := httptest.NewServer(mux)
@@ -443,6 +443,50 @@ func TestRegisterEndpoint(t *testing.T) {
 	status, payload = call(t, server, http.MethodPost, "/api/v1/auth/register", "", []byte(`{"name":"Weak","email":"weak@example.com","password":"short"}`))
 	if status != http.StatusBadRequest || !bytes.Contains(payload, []byte(`"errorCode":"AUTH01004"`)) {
 		t.Fatalf("weak register: expected 400 AUTH01004, got %d %s", status, payload)
+	}
+}
+
+func TestAdminOllamaEndpoints(t *testing.T) {
+	server, _ := adminTestMux(t)
+	ownerToken := loginToken(t, server, "owner@example.com", "owner-pass")
+	janeToken := loginToken(t, server, "jane@example.com", "jane-pass")
+
+	// Fake Ollama server answering the introspection endpoints.
+	ollama := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/tags":
+			_, _ = w.Write([]byte(`{"models":[{"name":"llama3.2:latest","size":2019393183,"details":{"parameter_size":"3.2B","quantization_level":"Q4_K_M"}}]}`))
+		case "/api/version":
+			_, _ = w.Write([]byte(`{"version":"0.5.7"}`))
+		case "/api/ps":
+			_, _ = w.Write([]byte(`{"models":[{"name":"llama3.2:latest","cpu":"99%","gpu":"0%","memory":"1.6GB/3.8GB"}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ollama.Close()
+
+	// General users are forbidden from introspecting the server.
+	status, _ := call(t, server, http.MethodGet, "/api/v1/admin/ai/ollama/models?baseUrl="+ollama.URL, janeToken, nil)
+	if status != http.StatusForbidden {
+		t.Fatalf("expected 403 for general user, got %d", status)
+	}
+
+	// Super owner lists models.
+	status, payload := call(t, server, http.MethodGet, "/api/v1/admin/ai/ollama/models?baseUrl="+ollama.URL, ownerToken, nil)
+	if status != http.StatusOK || !bytes.Contains(payload, []byte("llama3.2:latest")) {
+		t.Fatalf("ollama models failed: %d %s", status, payload)
+	}
+	// Health includes version and running-model stats.
+	status, payload = call(t, server, http.MethodGet, "/api/v1/admin/ai/ollama/health?baseUrl="+ollama.URL, ownerToken, nil)
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"version":"0.5.7"`)) || !bytes.Contains(payload, []byte(`"cpu":"99%"`)) {
+		t.Fatalf("ollama health failed: %d %s", status, payload)
+	}
+	// An invalid base URL is a 400 with ADMN06001.
+	status, payload = call(t, server, http.MethodGet, "/api/v1/admin/ai/ollama/models?baseUrl=ftp%3A%2F%2Fnope", ownerToken, nil)
+	if status != http.StatusBadRequest || !bytes.Contains(payload, []byte(`"errorCode":"ADMN06001"`)) {
+		t.Fatalf("invalid ollama url: expected 400 ADMN06001, got %d %s", status, payload)
 	}
 }
 

@@ -58,7 +58,7 @@ func main() {
 	aiHandler := handlers.NewAIHandler(aiService, queueConfigRepository, userRepository, usageLogRepository, limiter, authService)
 	adminService := services.NewAdminService(providerRepository, queueConfigRepository, repositories.NewSiteRepository(db), cfg.EncryptionKey, cfg.UploadsDir)
 	statsService := services.NewStatsService(usageLogRepository, userRepository, providerRepository, aiHandler)
-	adminHandler := handlers.NewAdminHandler(userService, adminService, statsService)
+	adminHandler := handlers.NewAdminHandler(userService, adminService, statsService, services.NewOllamaService())
 	sessionHandler := handlers.NewSessionHandler(sessionRepository, messageRepository, authService)
 	historyService := services.NewSearchHistoryService(searchHistoryRepository, llmService)
 

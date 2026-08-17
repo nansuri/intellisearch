@@ -62,6 +62,8 @@ func New(corsOrigins, uploadsDir string, siteService *services.SiteService, auth
 	admin.GET("/stats/ai", adminHandler.AIStats)
 	admin.GET("/ai/providers", adminHandler.ListProviders)
 	admin.POST("/ai/providers", adminHandler.CreateProvider)
+	admin.GET("/ai/ollama/models", adminHandler.OllamaModels)
+	admin.GET("/ai/ollama/health", adminHandler.OllamaHealth)
 	admin.PATCH("/ai/providers/:id", adminHandler.UpdateProvider)
 	admin.DELETE("/ai/providers/:id", adminHandler.DeleteProvider)
 	admin.GET("/ai/queue-config", adminHandler.QueueConfig)

@@ -21,6 +21,7 @@ export const FRIENDLY_ERRORS: Record<string, string> = {
   ADMN03002: 'That provider configuration is not valid.',
   ADMN04001: 'That queue configuration is not valid.',
   ADMN05001: 'That site configuration is not valid.',
+  ADMN06001: "Couldn't reach the Ollama server — check the base URL and that it's running.",
 }
 
 export class ApiError extends Error {
@@ -64,6 +65,9 @@ export type ProviderType = 'ollama' | 'openai_compatible' | 'pollinations' | 'hu
 export type Provider = { id: string; name: string; providerType: ProviderType; baseUrl: string; model: string; parameters: Record<string, unknown> | null; isActive: boolean }
 export type HistoryItem = { id: number; query: string; createdAt: string }
 export type QueueConfig = { maxConcurrent: number; maxQueueSize: number; requestTimeoutMs: number; perUserRateLimit: number }
+export type OllamaModel = { name: string; size: number; parameterSize?: string; quantization?: string }
+export type OllamaRunningModel = { name: string; size: number; sizeVram: number; cpu?: string; gpu?: string; memory?: string }
+export type OllamaHealth = { version: string; runningModels: OllamaRunningModel[] }
 export type TopQuery = { query: string; count: number }
 export type PerUserUsage = { userId: string; name: string; email: string; count: number }
 export type UserStats = { questionsToday: number; questionsWeek: number; activeUsersWeek: number; failed: number; topQueries: TopQuery[]; perUserUsage: PerUserUsage[] }
@@ -114,6 +118,10 @@ export const updateProvider = (id: string, input: { name?: string; providerType?
 export const deleteProvider = (id: string) => request<{ deleted: boolean }>(`/admin/ai/providers/${id}`, { method: 'DELETE' })
 export const getQueueConfig = () => request<QueueConfig>('/admin/ai/queue-config')
 export const updateQueueConfig = (input: QueueConfig) => request<QueueConfig>('/admin/ai/queue-config', { method: 'PATCH', body: JSON.stringify(input) })
+
+// Admin — Ollama introspection (proxied server-side; the browser never calls Ollama)
+export const listOllamaModels = (baseUrl: string) => request<{ models: OllamaModel[] }>(`/admin/ai/ollama/models?baseUrl=${encodeURIComponent(baseUrl)}`)
+export const getOllamaHealth = (baseUrl: string) => request<OllamaHealth>(`/admin/ai/ollama/health?baseUrl=${encodeURIComponent(baseUrl)}`)
 
 // Admin — branding
 export const getSiteSettings = () => request<SiteSettings>('/admin/site-settings')

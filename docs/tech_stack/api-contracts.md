@@ -39,6 +39,8 @@ Every API response uses:
 | POST | `/api/v1/admin/ai/providers` | Super Owner | Creates a provider (type, base URL, model, parameters, optional `apiKey`, `isActive`). |
 | PATCH | `/api/v1/admin/ai/providers/:id` | Super Owner | Updates a provider (blank `apiKey` keeps the existing encrypted key). |
 | DELETE | `/api/v1/admin/ai/providers/:id` | Super Owner | Deletes a provider. |
+| GET | `/api/v1/admin/ai/ollama/models?baseUrl=…` | Super Owner | Lists the models on an Ollama server (`GET {base}/api/tags`, proxied server-side so the browser never calls Ollama). Returns `{ models: [{ name, size, parameterSize, quantization }] }`. Invalid URL → `ADMN06001` (400); unreachable → `ADMN06001` (502). |
+| GET | `/api/v1/admin/ai/ollama/health?baseUrl=…` | Super Owner | Ollama server health + loaded-model stats: `{ ok, version, runningModels: [{ name, size, sizeVram, cpu, gpu, memory }] }` from `GET {base}/api/version` + `GET {base}/api/ps`. |
 | GET | `/api/v1/admin/ai/queue-config` | Super Owner | Reads `ai_queue_configs` singleton. |
 | PATCH | `/api/v1/admin/ai/queue-config` | Super Owner | Updates `max_concurrent`, `max_queue_size`, `request_timeout_ms`, `per_user_rate_limit` (applies within ~5 s, no redeploy). |
 | GET | `/api/v1/admin/site-settings` | Super Owner | Reads branding: `{ siteName, logoUrl, faviconUrl, tagline }`. |
@@ -48,7 +50,7 @@ Every API response uses:
 | POST | `/api/v1/admin/site-settings/favicon` | Super Owner | Multipart upload of the site favicon (JPG/PNG/GIF/WebP, ≤ 2 MB; returns `{ faviconUrl }`). The browser tab icon updates immediately. |
 | DELETE | `/api/v1/admin/site-settings/favicon` | Super Owner | Removes the favicon so browsers fall back to the bundled default SVG (returns `{ faviconUrl: null }`). |
 
-Error-code constants are defined in `backend/internal/contracts/errors.go` and follow `<FEATURE><SUBSET><ERROR>` (e.g. `AISY02001` queue full, `AISY02002` rate limited, `AISY02003` daily quota exceeded, `AISY03002` URL blocked, `AISY03003` invalid URL, `AISY03004` crawl failed, `AISY01001/2/3` provider unavailable/timeout/error). Auth uses `AUTH01001` (invalid credentials), `AUTH01002` (invalid/expired session), `AUTH01003` (Google sign-in unavailable/failed), `AUTH01004` (invalid registration data), `AUTH01005` (email already registered), `AUTH02001` (super-owner required). Account endpoints use `USER03001` (history load failed) and `USER03002` (history clear failed). Admin panel errors use `ADMN01001` (user ops), `ADMN02001` (statistics), `ADMN03001/2` (providers), `ADMN04001` (queue), `ADMN05001/2` (site settings/logo), `ADMN05003` (favicon upload).
+Error-code constants are defined in `backend/internal/contracts/errors.go` and follow `<FEATURE><SUBSET><ERROR>` (e.g. `AISY02001` queue full, `AISY02002` rate limited, `AISY02003` daily quota exceeded, `AISY03002` URL blocked, `AISY03003` invalid URL, `AISY03004` crawl failed, `AISY01001/2/3` provider unavailable/timeout/error). Auth uses `AUTH01001` (invalid credentials), `AUTH01002` (invalid/expired session), `AUTH01003` (Google sign-in unavailable/failed), `AUTH01004` (invalid registration data), `AUTH01005` (email already registered), `AUTH02001` (super-owner required). Account endpoints use `USER03001` (history load failed) and `USER03002` (history clear failed). Admin panel errors use `ADMN01001` (user ops), `ADMN02001` (statistics), `ADMN03001/2` (providers), `ADMN04001` (queue), `ADMN05001/2` (site settings/logo), `ADMN05003` (favicon upload), `ADMN06001` (Ollama server unreachable/invalid URL).
 
 ### AI pipeline behavior
 

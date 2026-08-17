@@ -98,3 +98,6 @@ const ADMN05002 = "ADMN05002"
 
 // ADMN05003 indicates a site favicon upload failed.
 const ADMN05003 = "ADMN05003"
+
+// ADMN06001 indicates the Ollama server could not be reached or the base URL is invalid.
+const ADMN06001 = "ADMN06001"

@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 
 	"intellisearch/internal/contracts"
 	"intellisearch/internal/middleware"
@@ -17,15 +18,17 @@ import (
 )
 
 // AdminHandler exposes the Super Owner control-panel surface: user CRUD,
-// statistics, AI provider management, queue knobs, and branding.
+// statistics, AI provider management, queue knobs, branding, and the Ollama
+// server introspection helpers for the provider form.
 type AdminHandler struct {
-	users *services.UserService
-	admin *services.AdminService
-	stats *services.StatsService
+	users  *services.UserService
+	admin  *services.AdminService
+	stats  *services.StatsService
+	ollama *services.OllamaService
 }
 
-func NewAdminHandler(users *services.UserService, admin *services.AdminService, stats *services.StatsService) *AdminHandler {
-	return &AdminHandler{users: users, admin: admin, stats: stats}
+func NewAdminHandler(users *services.UserService, admin *services.AdminService, stats *services.StatsService, ollama *services.OllamaService) *AdminHandler {
+	return &AdminHandler{users: users, admin: admin, stats: stats, ollama: ollama}
 }
 
 func (h *AdminHandler) ListUsers(c *gin.Context) {
@@ -202,6 +205,37 @@ func (h *AdminHandler) DeleteProvider(c *gin.Context) {
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"deleted": true}))
+}
+
+// OllamaModels lists the models on an Ollama server so the provider form can
+// offer a picker. The base URL comes from the provider being configured and is
+// fetched server-side (the browser never calls Ollama directly).
+func (h *AdminHandler) OllamaModels(c *gin.Context) {
+	models, err := h.ollama.Models(c.Request.Context(), c.Query("baseUrl"))
+	if err != nil {
+		h.respondOllamaError(c, err)
+		return
+	}
+	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"models": models}))
+}
+
+// OllamaHealth reports the server version plus loaded-model stats (/api/ps).
+func (h *AdminHandler) OllamaHealth(c *gin.Context) {
+	health, err := h.ollama.Health(c.Request.Context(), c.Query("baseUrl"))
+	if err != nil {
+		h.respondOllamaError(c, err)
+		return
+	}
+	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"ok": true, "version": health.Version, "runningModels": health.RunningModels}))
+}
+
+func (h *AdminHandler) respondOllamaError(c *gin.Context, err error) {
+	if errors.Is(err, services.ErrInvalidOllamaURL) {
+		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN06001, "Enter a valid Ollama base URL (http:// or https://)."))
+		return
+	}
+	logrus.WithError(err).Error("ollama server request failed")
+	middleware.JSON(c, http.StatusBadGateway, contracts.Fail(contracts.ADMN06001, "Couldn't reach the Ollama server — check the base URL and that it's running."))
 }
 
 func (h *AdminHandler) QueueConfig(c *gin.Context) {
