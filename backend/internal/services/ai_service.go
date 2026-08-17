@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 
 	"intellisearch/internal/models/entities"
 	"intellisearch/internal/repositories"
@@ -53,6 +54,7 @@ type AskResult struct {
 	MessageID uuid.UUID   `json:"messageId"`
 	Answer    string      `json:"answer"`
 	Sources   []SourceItem `json:"sources"`
+	Images    []ImageItem  `json:"images"`
 	VisitorID *uuid.UUID  `json:"visitorId,omitempty"`
 }
 
@@ -138,6 +140,7 @@ func (s *AIService) Answer(ctx context.Context, input AskInput) (AskResult, erro
 	_ = s.messages.Update(&assistantMessage)
 
 	sources := []SourceItem{}
+	images := []ImageItem{}
 	var promptSources []string
 	locationNote := ""
 	if input.URL != "" {
@@ -145,23 +148,26 @@ func (s *AIService) Answer(ctx context.Context, input AskInput) (AskResult, erro
 	} else {
 		var searchQuery string
 		searchQuery, locationNote = BuildLocationContext(ctx, s.geo, query, input.Location)
-		// Search-only mode skips the deep-read (no crawler work) — results are raw.
-		sources, promptSources, err = s.collectFromSearch(ctx, searchQuery, assistantMessage.ID, input.Mode != ModeSearch)
+		// Search-only mode skips the deep-read (no crawler work).
+		sources, promptSources, images, err = s.collectFromSearch(ctx, searchQuery, assistantMessage.ID, input.Mode != ModeSearch)
 	}
 	if err != nil {
 		return fail(err)
 	}
 
-	// "Ask" (search mode) stops here: no LLM synthesis, just the web results.
-	// The assistant message still exists (empty) so session history and source
-	// cards stay consistent, and the usage log records a completed non-AI ask.
+	// "Ask" (search mode) stops here: no LLM synthesis and no deep-read — the
+	// answer is an extractive summary composed from the SearXNG snippets, so it
+	// costs zero AI tokens. The usage log records a completed non-AI ask.
 	if input.Mode == ModeSearch {
+		assistantMessage.Content = buildSearchSummary(sources)
 		assistantMessage.Status = entities.MessageStatusCompleted
 		usageLog.LatencyMS = int(time.Since(started).Milliseconds())
 		usageLog.Status = entities.MessageStatusCompleted
 		_ = s.messages.Update(&assistantMessage)
 		_ = s.usageLogs.Update(&usageLog)
+		result.Answer = assistantMessage.Content
 		result.Sources = sources
+		result.Images = images
 		return result, nil
 	}
 
@@ -194,6 +200,7 @@ func (s *AIService) Answer(ctx context.Context, input AskInput) (AskResult, erro
 	}
 	result.Answer = answer
 	result.Sources = sources
+	result.Images = images
 	return result, nil
 }
 
@@ -245,17 +252,18 @@ func (s *AIService) conversationContext(session entities.ChatSession, currentUse
 	return chat
 }
 
-// collectFromSearch queries SearXNG, persists the source cards, and optionally
-// deep-reads the top pages (only for enhanced mode). Search failures degrade
-// gracefully: the LLM still answers, without web sources.
-func (s *AIService) collectFromSearch(ctx context.Context, query string, messageID uuid.UUID, deepRead bool) ([]SourceItem, []string, error) {
+// collectFromSearch queries SearXNG (web + images), persists the source cards
+// and image results, and optionally deep-reads the top pages (only for
+// enhanced mode). Search failures degrade gracefully: the LLM still answers,
+// without web sources; an image-search failure never fails the ask.
+func (s *AIService) collectFromSearch(ctx context.Context, query string, messageID uuid.UUID, deepRead bool) ([]SourceItem, []string, []ImageItem, error) {
 	items, err := s.search.Search(ctx, query)
 	if err != nil {
-		return []SourceItem{}, nil, nil
+		return []SourceItem{}, nil, []ImageItem{}, nil
 	}
 	if deepRead {
 		if err := s.deepRead(ctx, items); err != nil {
-			return []SourceItem{}, nil, err
+			return []SourceItem{}, nil, []ImageItem{}, err
 		}
 	}
 	sources := make([]entities.SearchResult, 0, len(items))
@@ -265,9 +273,53 @@ func (s *AIService) collectFromSearch(ctx context.Context, query string, message
 		promptSources = append(promptSources, fmt.Sprintf("[%d] %s — %s\n%s", item.Position, item.Title, item.URL, item.Snippet))
 	}
 	if err := s.messages.CreateSources(sources); err != nil {
-		return nil, nil, err
+		return nil, nil, []ImageItem{}, err
 	}
-	return items, promptSources, nil
+	images, imageErr := s.search.SearchImages(ctx, query)
+	if imageErr != nil {
+		logrus.WithError(imageErr).Warn("image search failed; continuing without images")
+	} else if len(images) > 0 {
+		rows := make([]entities.ImageResult, 0, len(images))
+		for _, image := range images {
+			rows = append(rows, entities.ImageResult{MessageID: messageID, Position: image.Position, Title: image.Title, URL: image.URL, ThumbnailURL: image.ThumbnailURL, Source: image.Source, Width: image.Width, Height: image.Height})
+		}
+		if err := s.messages.CreateImages(rows); err != nil {
+			logrus.WithError(err).Warn("image results persist failed; continuing without images")
+		}
+	}
+	return items, promptSources, images, nil
+}
+
+// buildSearchSummary composes a non-AI, extractive summary from the top
+// SearXNG snippets — no LLM tokens, no deep-read. It reads like a digest of
+// what the top results say, with citation numbers pointing at the source list.
+func buildSearchSummary(items []SourceItem) string {
+	parts := make([]string, 0, 3)
+	cites := make([]string, 0, 3)
+	for _, item := range items {
+		snippet := strings.TrimSpace(item.Snippet)
+		if snippet == "" {
+			continue
+		}
+		parts = append(parts, trimRunes(snippet, 180))
+		cites = append(cites, fmt.Sprintf("[%d]", item.Position))
+		if len(parts) == 3 {
+			break
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "Here's what the top results say: " + strings.Join(parts, " ") + " " + strings.Join(cites, "")
+}
+
+// trimRunes truncates a string to at most n runes (unicode-safe).
+func trimRunes(value string, n int) string {
+	runes := []rune(value)
+	if len(runes) <= n {
+		return value
+	}
+	return string(runes[:n])
 }
 
 // deepRead fetches the top N source pages in parallel, best-effort.

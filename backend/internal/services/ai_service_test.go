@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -34,6 +35,10 @@ func newAITestEnv(t *testing.T, searchDown bool) (*AIService, *gorm.DB, *int64) 
 	searchServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if searchDown {
 			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		if r.URL.Query().Get("categories") == "images" {
+			_, _ = w.Write([]byte(`{"results":[{"title":"Photo A","url":"https://img.example.com/a","img_src":"https://img.example.com/a.jpg","thumbnail_src":"https://img.example.com/a-thumb.jpg","source":"example.com","resolution":"640x480"},{"title":"Photo B","url":"https://img.example.com/b","img_src":"https://img.example.com/b.jpg","thumbnail_src":"https://img.example.com/b-thumb.jpg"}]}`))
 			return
 		}
 		_, _ = w.Write([]byte(`{"results":[{"title":"First Source","url":"https://one.example.com/a","content":"first snippet"},{"title":"Second Source","url":"https://two.example.com/b","content":"second snippet"}]}`))
@@ -96,6 +101,14 @@ func TestAnswerPersistsCitedResult(t *testing.T) {
 	}
 	if len(sources) != 2 {
 		t.Fatalf("expected 2 persisted sources, got %d", len(sources))
+	}
+	// Image results are searched alongside the web results and returned/persisted.
+	if len(result.Images) != 2 || result.Images[0].ThumbnailURL == "" || result.Images[0].Width != 640 || result.Images[0].Height != 480 {
+		t.Fatalf("unexpected image results %#v", result.Images)
+	}
+	var images []entities.ImageResult
+	if err := db.Where("message_id = ?", result.MessageID).Find(&images).Error; err != nil || len(images) != 2 {
+		t.Fatalf("expected 2 persisted image results, got %d (err=%v)", len(images), err)
 	}
 	var usage entities.UsageLog
 	if err := db.First(&usage).Error; err != nil {
@@ -192,23 +205,27 @@ func TestAnswerSkipsHistoryForURLSubmissions(t *testing.T) {
 	}
 }
 
-func TestAnswerSearchModeReturnsRawResultsWithoutAI(t *testing.T) {
+func TestAnswerSearchModeBuildsExtractiveSummaryWithoutAI(t *testing.T) {
 	service, db, crawlHits := newAITestEnv(t, false)
 	result, err := service.Answer(context.Background(), AskInput{Query: "best ramen in tokyo", Mode: ModeSearch})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Raw results only: no synthesized answer, no deep-read crawling.
-	if result.Answer != "" {
-		t.Fatalf("search mode must not synthesize an answer, got %q", result.Answer)
+	// The answer is an extractive summary composed from the SearXNG snippets —
+	// no LLM synthesis, no deep-read crawling, no provider attribution.
+	if !strings.Contains(result.Answer, "Here's what the top results say:") || !strings.Contains(result.Answer, "[1]") {
+		t.Fatalf("expected an extractive summary citing sources, got %q", result.Answer)
 	}
 	if len(result.Sources) != 2 {
 		t.Fatalf("expected 2 raw sources, got %d", len(result.Sources))
 	}
+	if len(result.Images) != 2 {
+		t.Fatalf("expected 2 image results, got %d", len(result.Images))
+	}
 	if atomic.LoadInt64(crawlHits) != 0 {
 		t.Fatalf("search mode must not deep-read sources, got %d crawler hits", *crawlHits)
 	}
-	// Sources are still persisted against the (empty) assistant message.
+	// Sources and images are persisted against the assistant message.
 	var sources []entities.SearchResult
 	if err := db.Where("message_id = ?", result.MessageID).Find(&sources).Error; err != nil || len(sources) != 2 {
 		t.Fatalf("expected 2 persisted sources, got %d (err=%v)", len(sources), err)

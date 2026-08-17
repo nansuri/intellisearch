@@ -52,9 +52,12 @@ export async function upload<T>(path: string, field: string, file: File): Promis
 
 export type SiteSettings = { siteName: string; logoUrl: string | null; faviconUrl: string | null; tagline: string | null; googleSsoEnabled?: boolean }
 export type Source = { position: number; title: string; url: string; domain: string; snippet: string }
+export type ImageItem = { position: number; title: string; url: string; thumbnailUrl: string; source?: string; width?: number; height?: number }
+
 export type GeoLocation = { latitude: number; longitude: number; accuracy?: number }
 export type AskMode = 'enhanced' | 'search'
-export type AskResult = { sessionId: string; messageId: string; answer: string; sources: Source[]; visitorId?: string }
+export type AskResult = { sessionId: string; messageId: string; answer: string; sources: Source[]; images?: ImageItem[]; visitorId?: string }
+export type SessionMessage = { id: string; role: 'system' | 'user' | 'assistant'; content: string; status: string; createdAt: string; sources?: Source[]; images?: ImageItem[] }
 
 // The anonymous guest token: issued by the backend on the first anonymous AI
 // ask (also mirrored in an httpOnly cookie). It ties a device to its single
@@ -72,7 +75,6 @@ function visitorHeaders(): Record<string, string> {
 function rememberVisitorId(result: AskResult | undefined) {
   if (result?.visitorId) localStorage.setItem(VISITOR_KEY, result.visitorId)
 }
-export type SessionMessage = { id: string; role: 'system' | 'user' | 'assistant'; content: string; status: string; createdAt: string; sources?: Source[] }
 export type ChatSession = { sessionId: string; title: string; createdAt: string; messages: SessionMessage[] }
 
 export type User = { id: string; name: string; email: string; role: 'general_user' | 'super_owner'; status: 'active' | 'suspended'; avatarUrl: string | null; aiDailyQuota: number; lastLoginAt: string | null; createdAt: string }

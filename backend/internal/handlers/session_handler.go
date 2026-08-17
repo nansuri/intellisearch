@@ -57,6 +57,10 @@ func (h *SessionHandler) Get(c *gin.Context) {
 			if err == nil {
 				view["sources"] = sources
 			}
+			images, err := h.messages.Images(message.ID)
+			if err == nil {
+				view["images"] = images
+			}
 		}
 		views = append(views, view)
 	}

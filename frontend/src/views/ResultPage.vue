@@ -7,9 +7,11 @@ import ErrorBanner from '../components/ErrorBanner.vue'
 import UrlAskBox from '../components/UrlAskBox.vue'
 import CollapsibleAnswer from '../components/CollapsibleAnswer.vue'
 import FollowUpBlock, { type FollowUpEntry } from '../components/FollowUpBlock.vue'
+import ImageGrid from '../components/ImageGrid.vue'
 import { useSiteStore } from '../stores/site'
 import SourceCard from '../components/SourceCard.vue'
-import { ask, askUrl, getSession, ApiError, type AskMode, type Source } from '../services/api'
+import { ask, askUrl, getSession, ApiError, type AskMode, type ImageItem, type Source } from '../services/api'
+import { clearSearchSession } from '../composables/useSearchSession'
 import { settleAskGhost } from '../services/motion'
 import { resolveLocationForQuery } from '../composables/useDeviceLocation'
 import { needsLocationContext } from '../utils/locationIntent'
@@ -31,6 +33,7 @@ const error = ref<string | null>(null)
 const guestLimitReached = ref(false)
 const answer = ref('')
 const sources = ref<Source[]>([])
+const images = ref<ImageItem[]>([])
 const sessionId = ref<string | null>(null)
 const elapsed = ref(0)
 const thread = ref<FollowUpEntry[]>([])
@@ -73,12 +76,14 @@ function persistState() {
     query: query.value,
     answer: answer.value,
     sources: sources.value,
+    images: images.value,
     thread: thread.value
       .filter((entry) => entry.answer && !entry.loading)
       .map((entry) => ({
         question: entry.question,
         answer: entry.answer,
         sources: entry.sources,
+        images: entry.images,
         collapsed: entry.collapsed,
       })),
     primaryCollapsed: primaryCollapsed.value,
@@ -93,6 +98,7 @@ function applyPersistedState(saved: ReturnType<typeof loadSearchSession>) {
   sessionId.value = saved.sessionId
   answer.value = saved.answer
   sources.value = saved.sources
+  images.value = saved.images || []
   primaryCollapsed.value = saved.primaryCollapsed
   elapsed.value = saved.elapsed
   thread.value = toFollowUpEntries(saved.thread)
@@ -109,6 +115,7 @@ async function restoreFromApi(id: string): Promise<boolean> {
     sessionId.value = session.sessionId
     answer.value = mapped.answer
     sources.value = mapped.sources
+    images.value = mapped.images
     thread.value = mapped.thread
     followUpSeq = mapped.followUpSeq
     error.value = null
@@ -128,6 +135,7 @@ function resetState() {
   guestLimitReached.value = false
   answer.value = ''
   sources.value = []
+  images.value = []
   sessionId.value = null
   elapsed.value = 0
   thread.value = []
@@ -175,6 +183,7 @@ async function runInitial() {
     const result = await ask(query.value, undefined, location, mode.value)
     answer.value = result.answer
     sources.value = result.sources || []
+    images.value = result.images || []
     sessionId.value = result.sessionId
     elapsed.value = Math.round((performance.now() - startedAt) / 100) / 10
     persistState()
@@ -199,6 +208,7 @@ async function followUp(question: string) {
     question,
     answer: '',
     sources: [],
+    images: [],
     error: null,
     loading: true,
     collapsed: false,
@@ -218,6 +228,7 @@ async function followUp(question: string) {
     const result = await ask(question, sessionId.value, location, mode.value)
     thread.value[index].answer = result.answer
     thread.value[index].sources = result.sources || []
+    thread.value[index].images = result.images || []
     thread.value[index].loading = false
     thread.value[index].highlighted = true
     persistState()
@@ -246,6 +257,13 @@ function onAsk(question: string) {
   router.push({ path: '/search', query: { q: question, mode: mode.value } })
 }
 
+// Ends the follow-up thread and returns to the main page for a fresh search.
+function startNewSearch() {
+  clearSearchSession()
+  resetState()
+  router.push('/')
+}
+
 // Switches a search-only result to the enhanced pipeline and re-runs it.
 function upgradeToEnhanced() {
   if (mode.value === 'enhanced') return
@@ -262,6 +280,7 @@ async function submitUrl(url: string) {
     const result = await askUrl(url)
     answer.value = result.answer
     sources.value = result.sources || []
+    images.value = result.images || []
     sessionId.value = result.sessionId
     error.value = null
     primaryCollapsed.value = false
@@ -307,13 +326,17 @@ watch(
         <AskBox
           variant="google"
           :placeholder="sessionId ? 'Ask a follow-up…' : 'Ask a question, explore an idea…'"
+          :follow-up="Boolean(sessionId)"
           @submit="onAsk"
+          @new-search="startNewSearch"
         />
       </template>
     </AppHeader>
 
     <section class="result-content">
       <div class="result-kicker">
+        <span class="result-kind">New search</span>
+        <span>·</span>
         <span>Search results</span>
         <span>·</span>
         <span>{{ loading || restoring ? (locating ? 'Getting your location…' : restoring ? 'Restoring your search…' : 'Searching the web…') : `${sources.length} sources${elapsed ? ` · ${elapsed}s` : ''}` }}</span>
@@ -339,14 +362,16 @@ watch(
         <div class="summary-note">{{ restoring ? 'Loading your previous answer…' : mode === 'search' ? 'Searching the web…' : 'Searching the web and reading the best sources…' }}</div>
       </article>
 
-      <CollapsibleAnswer
-        v-else-if="mode === 'enhanced'"
-        label="AI overview"
-        :answer="answer"
-        :sources="sources"
-        :collapsed="primaryCollapsed"
-        @update:collapsed="(value) => { primaryCollapsed = value; persistState() }"
-      />
+      <template v-else-if="mode === 'enhanced'">
+        <CollapsibleAnswer
+          label="AI overview"
+          :answer="answer"
+          :sources="sources"
+          :collapsed="primaryCollapsed"
+          @update:collapsed="(value) => { primaryCollapsed = value; persistState() }"
+        />
+        <ImageGrid v-if="images.length" :images="images" />
+      </template>
 
       <section v-else class="search-results-only">
         <div class="search-results-head">
@@ -354,14 +379,23 @@ watch(
             <div class="section-label">Web results</div>
             <h2 class="search-results-title">Top matches</h2>
           </div>
-          <button type="button" class="base-button button-secondary search-upgrade" @click="upgradeToEnhanced">Ask AI for a summary</button>
+          <button type="button" class="base-button button-secondary search-upgrade" @click="upgradeToEnhanced">Ask AI to write it</button>
         </div>
-        <p class="search-only-note">Raw web results — Enhanced Ask adds an AI-synthesized answer with citations.</p>
-        <div v-if="sources.length" class="sources">
+        <p class="search-only-note">Summary pulled from the top search results — no AI used. Ask AI for a synthesized, cited answer.</p>
+        <CollapsibleAnswer
+          v-if="answer"
+          label="Summary from top results"
+          :answer="answer"
+          :sources="sources"
+          :collapsed="primaryCollapsed"
+          @update:collapsed="(value) => { primaryCollapsed = value; persistState() }"
+        />
+        <ImageGrid v-if="images.length" :images="images" />
+        <div v-if="!answer && sources.length" class="sources">
           <div class="sources-heading"><h2>Results</h2><span>{{ sources.length }} found</span></div>
           <SourceCard v-for="source in sources" :key="source.position" :source="source" />
         </div>
-        <div v-else class="empty-sources">
+        <div v-if="!answer && !sources.length" class="empty-sources">
           <div class="empty-source-copy">
             <h2>No web results found</h2>
             <p>Try rewording your question, or submit a URL for the AI to read that page directly.</p>
@@ -445,6 +479,19 @@ watch(
 }
 .guest-limit-copy { line-height: 1.5; }
 @media (max-width: 520px) { .guest-limit-banner { align-items: flex-start; flex-direction: column; } }
+.result-kind {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-surface));
+  color: var(--color-primary);
+  font-size: .66rem;
+  font-weight: 760;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
 .result-location-tag { color: var(--color-primary); font-weight: 680; }
 .location-note {
   margin: 12px 0 0;

@@ -8,6 +8,30 @@ import (
 	"testing"
 )
 
+func TestSearchImagesParsesSearXNGImageResults(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("categories") != "images" {
+			t.Fatalf("expected images category, got %q", r.URL.Query().Get("categories"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"results":[{"title":"A photo","url":"https://photos.example.com/a","img_src":"https://photos.example.com/a.jpg","thumbnail_src":"https://photos.example.com/a-thumb.jpg","source":"example.com","resolution":"1920x1080"},{"title":"No thumb","url":"https://photos.example.com/b","img_src":"https://photos.example.com/b.jpg","resolution":"bad"}]}`))
+	}))
+	defer server.Close()
+	service := NewSearchService(config.Config{SearXNGBaseURL: server.URL, SearXNGTimeoutMS: 1000})
+	images, err := service.SearchImages(context.Background(), "mountains")
+	if err != nil || len(images) != 2 {
+		t.Fatalf("unexpected images: %#v, %v", images, err)
+	}
+	first := images[0]
+	if first.Position != 1 || first.ThumbnailURL != "https://photos.example.com/a-thumb.jpg" || first.Width != 1920 || first.Height != 1080 {
+		t.Fatalf("unexpected first image: %#v", first)
+	}
+	// A missing thumbnail falls back to the full image URL; bad resolution → 0x0.
+	if images[1].ThumbnailURL != "https://photos.example.com/b.jpg" || images[1].Width != 0 || images[1].Height != 0 {
+		t.Fatalf("unexpected fallback image: %#v", images[1])
+	}
+}
+
 func TestSearchMapsSearXNGResults(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("format") != "json" {

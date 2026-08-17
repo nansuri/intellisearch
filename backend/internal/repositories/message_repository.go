@@ -24,6 +24,17 @@ func (r *MessageRepository) CreateSources(sources []entities.SearchResult) error
 	}
 	return r.db.Create(&sources).Error
 }
+func (r *MessageRepository) CreateImages(images []entities.ImageResult) error {
+	if len(images) == 0 {
+		return nil
+	}
+	return r.db.Create(&images).Error
+}
+func (r *MessageRepository) Images(messageID uuid.UUID) ([]entities.ImageResult, error) {
+	var images []entities.ImageResult
+	err := r.db.Where("message_id = ?", messageID).Order("position asc").Find(&images).Error
+	return images, err
+}
 
 // Summaries returns the content of the given messages keyed by message ID,
 // used to render search-history summaries without duplicating answer text in

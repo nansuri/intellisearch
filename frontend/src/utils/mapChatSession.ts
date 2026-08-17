@@ -1,16 +1,18 @@
-import type { ChatSession, Source } from '../services/api'
+import type { ChatSession, ImageItem, Source } from '../services/api'
 import type { FollowUpEntry } from '../components/FollowUpBlock.vue'
 
 /** Maps a stored chat session into result-page state. */
 export function mapChatSession(session: ChatSession): {
   answer: string
   sources: Source[]
+  images: ImageItem[]
   thread: FollowUpEntry[]
   followUpSeq: number
 } {
   const completed = session.messages.filter((message) => message.status === 'completed')
   let answer = ''
   let sources: Source[] = []
+  let images: ImageItem[] = []
   const thread: FollowUpEntry[] = []
   let followUpSeq = 0
 
@@ -23,6 +25,7 @@ export function mapChatSession(session: ChatSession): {
     if (!answer) {
       answer = assistant.content
       sources = assistant.sources || []
+      images = assistant.images || []
     } else {
       followUpSeq += 1
       thread.push({
@@ -30,6 +33,7 @@ export function mapChatSession(session: ChatSession): {
         question: userMessage.content,
         answer: assistant.content,
         sources: assistant.sources || [],
+        images: assistant.images || [],
         error: null,
         loading: false,
         collapsed: false,
@@ -39,5 +43,5 @@ export function mapChatSession(session: ChatSession): {
     index += 1
   }
 
-  return { answer, sources, thread, followUpSeq }
+  return { answer, sources, images, thread, followUpSeq }
 }

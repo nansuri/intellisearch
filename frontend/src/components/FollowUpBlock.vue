@@ -3,13 +3,15 @@ import { nextTick, onMounted, ref, watch } from 'vue'
 import ErrorBanner from './ErrorBanner.vue'
 import FollowUpLoading from './FollowUpLoading.vue'
 import CollapsibleAnswer from './CollapsibleAnswer.vue'
-import type { Source } from '../services/api'
+import ImageGrid from './ImageGrid.vue'
+import type { ImageItem, Source } from '../services/api'
 
 export type FollowUpEntry = {
   id: number
   question: string
   answer: string
   sources: Source[]
+  images: ImageItem[]
   error: string | null
   loading: boolean
   collapsed: boolean
@@ -52,25 +54,27 @@ defineExpose({ scrollToBlock })
       'follow-up-item--highlight': entry.highlighted,
     }"
   >
-    <div class="follow-up-label">Follow-up {{ index + 1 }}</div>
+    <div class="follow-up-label"><span class="follow-up-badge">Follow-up {{ index + 1 }}</span></div>
     <p class="follow-up-question" :class="{ 'follow-up-question--pulse': entry.loading }">{{ entry.question }}</p>
 
     <ErrorBanner v-if="entry.error" :message="entry.error" />
 
     <FollowUpLoading v-else-if="entry.loading" />
 
-    <CollapsibleAnswer
-      v-else
-      :label="searchOnly ? 'Web results' : 'AI overview'"
-      :answer="entry.answer"
-      :sources="entry.sources"
-      :collapsed="entry.collapsed"
-      :highlighted="entry.highlighted"
-      :empty-label="searchOnly ? 'Raw web results — no AI summary.' : undefined"
-      compact
-      class="follow-up-answer"
-      @update:collapsed="emit('update:collapsed', $event)"
-    />
+    <template v-else>
+      <CollapsibleAnswer
+        :label="searchOnly ? 'Summary from top results' : 'AI overview'"
+        :answer="entry.answer"
+        :sources="entry.sources"
+        :collapsed="entry.collapsed"
+        :highlighted="entry.highlighted"
+        :empty-label="searchOnly ? 'No web results to summarize.' : undefined"
+        compact
+        class="follow-up-answer"
+        @update:collapsed="emit('update:collapsed', $event)"
+      />
+      <ImageGrid v-if="entry.images.length" :images="entry.images" class="follow-up-images" />
+    </template>
   </div>
 </template>
 
@@ -88,6 +92,21 @@ defineExpose({ scrollToBlock })
 .follow-up-question--pulse {
   animation: follow-up-question-pulse 1.6s ease-in-out infinite;
 }
+.follow-up-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-surface));
+  color: var(--color-primary);
+  font-size: .68rem;
+  font-weight: 760;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.follow-up-images { margin-top: 8px; }
 .follow-up-answer { margin-top: 0; }
 @keyframes follow-up-nudge {
   0% { transform: translateY(6px); opacity: .72; }

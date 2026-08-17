@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import BaseButton from './BaseButton.vue'
 import type { AskMode } from '../services/api'
 
-const props = withDefaults(defineProps<{ variant?: 'default' | 'google'; compact?: boolean; helperText?: string; suggestions?: string[]; showPrompt?: boolean; placeholder?: string; mode?: AskMode; modeToggle?: boolean }>(), {
+const props = withDefaults(defineProps<{ variant?: 'default' | 'google'; compact?: boolean; helperText?: string; suggestions?: string[]; showPrompt?: boolean; placeholder?: string; mode?: AskMode; modeToggle?: boolean; followUp?: boolean }>(), {
   variant: 'default',
   compact: false,
   helperText: '',
@@ -12,8 +12,9 @@ const props = withDefaults(defineProps<{ variant?: 'default' | 'google'; compact
   placeholder: '',
   mode: 'enhanced',
   modeToggle: false,
+  followUp: false,
 })
-const emit = defineEmits<{ submit: [question: string, mode: AskMode]; 'update:mode': [mode: AskMode] }>()
+const emit = defineEmits<{ submit: [question: string, mode: AskMode]; 'update:mode': [mode: AskMode]; 'new-search': [] }>()
 const value = ref('')
 
 const activeMode = computed<AskMode>(() => props.mode || 'enhanced')
@@ -58,7 +59,13 @@ function setMode(mode: AskMode) { emit('update:mode', mode) }
         <span class="ask-mode-dot" />
         Search
       </button>
-      <span class="ask-mode-hint">{{ activeMode === 'search' ? 'Raw web results' : 'AI answer + cited sources' }}</span>
+      <span class="ask-mode-hint">{{ activeMode === 'search' ? 'Summary from results · no AI used' : 'AI answer + cited sources' }}</span>
+    </div>
+
+    <div v-if="props.followUp" class="ask-followup-note">
+      <span class="ask-followup-dot" />
+      <span class="ask-followup-copy">Sending as a follow-up to this search</span>
+      <button type="button" class="ask-new-search" @click="emit('new-search')">Start new search</button>
     </div>
 
     <p v-if="props.helperText" class="ask-helper">{{ props.helperText }}</p>
@@ -102,5 +109,32 @@ function setMode(mode: AskMode) { emit('update:mode', mode) }
 .ask-mode-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-muted); transition: background .16s ease; }
 .ask-mode button.active .ask-mode-dot { background: var(--color-primary); }
 .ask-mode-hint { margin-left: 6px; padding-left: 8px; border-left: 1px solid var(--color-border); color: var(--color-muted); font-size: .7rem; }
+.ask-followup-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 26%, var(--color-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+  color: var(--color-muted);
+  font-size: .74rem;
+}
+.ask-followup-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-primary); flex: 0 0 auto; }
+.ask-followup-copy { white-space: nowrap; }
+.ask-new-search {
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: .72rem;
+  font-weight: 720;
+  white-space: nowrap;
+  transition: background .14s ease;
+}
+.ask-new-search:hover { background: color-mix(in srgb, var(--color-primary) 12%, transparent); }
 @media (max-width: 520px) { .ask-mode-hint { display: none; } }
 </style>

@@ -1,4 +1,4 @@
-import type { Source } from '../services/api'
+import type { ImageItem, Source } from '../services/api'
 import type { FollowUpEntry } from '../components/FollowUpBlock.vue'
 
 const STORAGE_KEY = 'search_session_v1'
@@ -8,7 +8,8 @@ export type PersistedSearchState = {
   query: string
   answer: string
   sources: Source[]
-  thread: Array<{ question: string; answer: string; sources: Source[]; collapsed?: boolean }>
+  images: ImageItem[]
+  thread: Array<{ question: string; answer: string; sources: Source[]; images: ImageItem[]; collapsed?: boolean }>
   primaryCollapsed: boolean
   elapsed: number
   savedAt: number
@@ -49,6 +50,7 @@ export function toFollowUpEntries(
     question: entry.question,
     answer: entry.answer,
     sources: entry.sources || [],
+    images: entry.images || [],
     error: null,
     loading: false,
     collapsed: entry.collapsed ?? false,

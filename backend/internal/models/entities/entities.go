@@ -90,6 +90,22 @@ type Message struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+// ImageResult is a SearXNG image result persisted against the assistant
+// message that searched for it (both search-only and enhanced asks), so the
+// result page can re-render the image grid on restore without re-searching.
+type ImageResult struct {
+	ID           uint64    `gorm:"primaryKey" json:"id"`
+	MessageID    uuid.UUID `gorm:"type:uuid;index;not null" json:"messageId"`
+	Position     int       `gorm:"not null" json:"position"`
+	Title        string    `gorm:"not null" json:"title"`
+	URL          string    `gorm:"type:text;not null" json:"url"`
+	ThumbnailURL string    `gorm:"type:text;not null" json:"thumbnailUrl"`
+	Source       string    `gorm:"not null" json:"source"`
+	Width        int       `json:"width"`
+	Height       int       `json:"height"`
+	CreatedAt    time.Time `json:"createdAt"`
+}
+
 type SearchResult struct {
 	ID        uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
 	MessageID uuid.UUID `gorm:"type:uuid;index;not null" json:"messageId"`

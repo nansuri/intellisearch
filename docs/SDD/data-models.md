@@ -50,6 +50,21 @@
 
 > `search_results` persists the Result Page's source cards so shared/deep-linked result URLs and follow-up threads can re-render their sources without re-crawling.
 
+### image_results
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | bigserial (PK) | |
+| message_id | UUID (FK → messages) | the assistant message that searched for these images |
+| position | int | grid order |
+| title | varchar | from SearXNG image listing |
+| url | text | the original page/asset URL |
+| thumbnail_url | text | thumbnail (falls back to the full image URL) |
+| source | varchar | originating site |
+| width / height | int | from SearXNG `resolution` (0 when unknown) |
+| created_at | timestamptz | |
+
+> SearXNG **image results** (`categories=images`), persisted per assistant message so the result page can re-render the image grid on restore. Only URLs are stored — the API never fetches third-party images server-side (no SSRF surface; the browser loads them directly). Image search is best-effort in both ask modes and never fails an ask.
+
 ### ai_providers
 | Field | Type | Notes |
 | --- | --- | --- |
