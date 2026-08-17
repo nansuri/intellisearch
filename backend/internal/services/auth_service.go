@@ -18,7 +18,11 @@ import (
 	"intellisearch/internal/repositories"
 )
 
-var ErrInvalidCredentials = errors.New("invalid credentials")
+var (
+	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrInvalidRegistration = errors.New("invalid registration data")
+	ErrEmailTaken          = errors.New("email already registered")
+)
 
 type Claims struct {
 	UserID string `json:"userId"`
@@ -177,6 +181,42 @@ func (s *AuthService) fetchGoogleProfile(code string) (googleProfile, error) {
 		return googleProfile{}, ErrGoogleUnavailable
 	}
 	return profile, nil
+}
+
+// Register creates a new general-user account, hashes the password, and issues
+// a JWT so the user lands signed in. Google SSO registration uses the same
+// find-or-create path as GoogleCallback.
+func (s *AuthService) Register(name, email, password string) (string, entities.User, error) {
+	name = strings.TrimSpace(name)
+	email = strings.ToLower(strings.TrimSpace(email))
+	if name == "" || !strings.Contains(email, "@") || len(password) < 8 {
+		return "", entities.User{}, ErrInvalidRegistration
+	}
+	if _, err := s.users.ByEmail(email); err == nil {
+		return "", entities.User{}, ErrEmailTaken
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", entities.User{}, err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", entities.User{}, err
+	}
+	now := time.Now().UTC()
+	user := entities.User{
+		ID: uuid.New(), Name: name, Email: email, PasswordHash: string(hash),
+		Role: entities.RoleGeneralUser, Status: entities.StatusActive,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if err := s.users.Create(&user); err != nil {
+		return "", entities.User{}, err
+	}
+	user.LastLoginAt = &now
+	if err := s.users.Save(&user); err != nil {
+		return "", entities.User{}, err
+	}
+	claims := Claims{UserID: user.ID.String(), Role: user.Role, RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(now.Add(s.ttl)), IssuedAt: jwt.NewNumericDate(now)}}
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.secret)
+	return token, user, err
 }
 
 func (s *AuthService) Login(email, password string) (string, entities.User, error) {

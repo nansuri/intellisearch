@@ -1,8 +1,7 @@
 /* Admin control panel — theme-aware dashboard palette ---------------------- */
 /* Tokens are scoped to admin surfaces and follow html[data-theme]. */
 
-[data-theme="light"] .admin-shell,
-[data-theme="light"] .admin-login {
+[data-theme="light"] .admin-shell {
   --color-bg: #f3f6fc;
   --color-surface: #ffffff;
   --color-surface-subtle: #eef2f9;
@@ -19,8 +18,7 @@
   --color-bg-glow: radial-gradient(1200px 500px at 80% -10%, rgba(79, 110, 247, .1), transparent 60%);
 }
 
-[data-theme="dark"] .admin-shell,
-[data-theme="dark"] .admin-login {
+[data-theme="dark"] .admin-shell {
   --color-bg: #080d18;
   --color-surface: #0f1830;
   --color-surface-subtle: #1a2440;
@@ -141,7 +139,7 @@
 
 /* Buttons (admin override) -------------------------------------------------- */
 .admin-shell .base-button { border-radius: 10px; }
-.admin-shell .button-primary, .admin-login .button-primary { background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 55%, #8b6dff)); color: #fff; box-shadow: 0 8px 22px color-mix(in srgb, var(--color-primary) 32%, transparent); }
+.admin-shell .button-primary { background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 55%, #8b6dff)); color: #fff; box-shadow: 0 8px 22px color-mix(in srgb, var(--color-primary) 32%, transparent); }
 .admin-shell .button-primary:hover { filter: brightness(1.06); }
 .admin-shell .button-secondary { border-color: var(--color-border); background: var(--color-surface); color: var(--color-text); }
 .admin-shell .button-secondary:hover { border-color: var(--color-primary); }
@@ -150,7 +148,7 @@
 .base-button:disabled { opacity: .55; cursor: not-allowed; }
 
 /* Badges & pills ------------------------------------------------------------ */
-.admin-shell .status-pill, .admin-login .status-pill { height: fit-content; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--color-border); background: var(--color-surface-subtle); color: var(--color-muted); font-size: .68rem; font-weight: 700; white-space: nowrap; }
+.admin-shell .status-pill { height: fit-content; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--color-border); background: var(--color-surface-subtle); color: var(--color-muted); font-size: .68rem; font-weight: 700; white-space: nowrap; }
 .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface-subtle); color: var(--color-muted); font-size: .7rem; font-weight: 700; white-space: nowrap; }
 .status-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .status-badge--success { border-color: color-mix(in srgb, #34d399 35%, var(--color-border)); background: color-mix(in srgb, #34d399 12%, var(--color-surface)); color: #34d399; }
@@ -184,7 +182,7 @@
 .avatar-img, .avatar-initials { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; font-size: .68rem; font-weight: 750; object-fit: cover; }
 .avatar-img { border: 1px solid var(--color-border); }
 .avatar-initials { background: var(--color-surface-subtle); color: var(--color-muted); }
-.admin-shell .avatar-initials, .admin-login .avatar-initials { background: linear-gradient(135deg, var(--color-surface-subtle), color-mix(in srgb, var(--color-primary) 22%, var(--color-surface-subtle))); }
+.admin-shell .avatar-initials { background: linear-gradient(135deg, var(--color-surface-subtle), color-mix(in srgb, var(--color-primary) 22%, var(--color-surface-subtle))); }
 
 /* Stat cards ---------------------------------------------------------------- */
 .stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
@@ -298,33 +296,6 @@
 .toast--info .toast-dot { background: var(--color-primary); }
 .toast-enter-active, .toast-leave-active { transition: all .22s ease; }
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateY(8px); }
-
-/* Admin login --------------------------------------------------------------- */
-.admin-login { position: relative; display: grid; place-items: center; min-height: 100dvh; padding: 24px; background: var(--color-bg) var(--color-bg-glow); color: var(--color-text); }
-.admin-login-top { position: absolute; top: 20px; right: clamp(20px, 4vw, 56px); }
-.admin-login-top select {
-  min-height: 36px;
-  padding: 0 24px 0 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: .78rem;
-  font-weight: 650;
-  cursor: pointer;
-}
-.admin-login-card { width: min(420px, 100%); padding: 36px; border: 1px solid var(--color-border); border-radius: 20px; background: var(--color-surface); box-shadow: 0 30px 80px rgba(0, 0, 0, .45); }
-.admin-login-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 26px; }
-.admin-login-brand .brand-mark { width: 42px; height: 42px; border-radius: 12px; font-size: .82rem; background: linear-gradient(135deg, var(--color-primary), #8b6dff); color: #fff; }
-.admin-login-logo { width: 42px; height: 42px; border-radius: 12px; object-fit: contain; background: var(--color-bg); }
-.admin-login-brand div { display: grid; gap: 1px; }
-.admin-login-brand strong { font-size: .94rem; letter-spacing: -.02em; }
-.admin-login-brand span { color: var(--color-muted); font-size: .74rem; }
-.admin-login-card h1 { margin: 0 0 8px; font-size: 1.7rem; letter-spacing: -.04em; }
-.admin-login-sub { margin: 0 0 22px; color: var(--color-muted); font-size: .88rem; line-height: 1.55; }
-.admin-login-submit { width: 100%; margin-top: 10px; }
-.admin-login-user-link { display: block; margin-top: 20px; text-align: center; color: var(--color-muted); font-size: .78rem; font-weight: 650; text-decoration: none; }
-.admin-login-user-link:hover { color: var(--color-primary); }
 
 @media (max-width: 1023px) {
   .admin-sidebar { position: fixed; top: 0; left: 0; z-index: 70; width: min(280px, 84vw); height: 100dvh; transform: translateX(-105%); transition: transform .22s ease; border-right: 1px solid var(--color-border); box-shadow: 0 0 60px var(--color-shadow); }

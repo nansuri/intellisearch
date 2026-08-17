@@ -9,6 +9,8 @@ export const FRIENDLY_ERRORS: Record<string, string> = {
   AISY02003: "You've reached today's question limit — try again tomorrow.",
   AUTH01001: 'Invalid email or password.',
   AUTH01002: 'Your session is invalid or has expired. Please sign in again.',
+  AUTH01004: 'Enter your name, a valid email, and a password of at least 8 characters.',
+  AUTH01005: 'An account with that email already exists — try signing in instead.',
   AUTH02001: 'You need Super Owner access for that.',
   AISY03002: 'That URL is not allowed — internal or private addresses are blocked.',
   AISY03003: 'That URL is not valid.',
@@ -83,6 +85,7 @@ export const getSession = (id: string) => request<ChatSession>(`/sessions/${id}`
 
 // Auth & account
 export const login = (email: string, password: string) => request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) })
+export const register = (name: string, email: string, password: string) => request<LoginResponse>('/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password }) })
 export const logout = () => request<{ loggedOut: boolean }>('/auth/logout', { method: 'POST' })
 export const getMe = () => request<MeResponse>('/me')
 export const updateMe = (name: string, email: string) => request<User>('/me', { method: 'PATCH', body: JSON.stringify({ name, email }) })

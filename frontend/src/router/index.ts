@@ -3,7 +3,7 @@ import { useAuthStore } from '../stores/auth'
 import MainPage from '../views/MainPage.vue'
 import ResultPage from '../views/ResultPage.vue'
 import AccountSettings from '../views/AccountSettings.vue'
-import LoginView from '../views/LoginView.vue'
+import AuthView from '../views/AuthView.vue'
 import AuthCallback from '../views/AuthCallback.vue'
 
 const ControlPanel = () => import('../views/admin/ControlPanel.vue')
@@ -12,9 +12,12 @@ const routes = [
   { path: '/', component: MainPage },
   { path: '/search', component: ResultPage },
   { path: '/account', component: AccountSettings, meta: { requiresAuth: true } },
-  { path: '/login', component: LoginView, meta: { publicAuth: true } },
+  { path: '/login', component: AuthView, meta: { publicAuth: true } },
+  { path: '/register', redirect: () => '/login?mode=register' },
+  // Login is unified for every account type; keep the old admin path redirecting
+  // so stale bookmarks and links still land on the sign-in page.
+  { path: '/admin/login', redirect: '/login' },
   { path: '/auth/callback', component: AuthCallback, meta: { publicCallback: true } },
-  { path: '/admin/login', component: () => import('../views/admin/AdminLogin.vue'), meta: { publicAdmin: true } },
   {
     path: '/admin',
     component: ControlPanel,
@@ -45,15 +48,12 @@ router.beforeEach(async (to) => {
   // the user out.
   if (auth.token && !auth.user) await auth.restore()
   if (to.meta.publicCallback) return true
-  if (to.meta.publicAuth || to.meta.publicAdmin) {
-    if (auth.isAuthed && auth.user) {
-      if (to.meta.publicAdmin && auth.user.role === 'super_owner') return { path: '/admin' }
-      return { path: '/' }
-    }
+  if (to.meta.publicAuth) {
+    if (auth.isAuthed && auth.user) return { path: '/' }
     return true
   }
   if (to.meta.requiresAdmin) {
-    if (!auth.isAuthed) return { path: '/admin/login' }
+    if (!auth.isAuthed) return { path: '/login' }
     if (!auth.user) await auth.restore()
     if (!auth.user || auth.user.role !== 'super_owner') return { path: '/' }
     return true

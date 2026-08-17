@@ -57,7 +57,7 @@ function go(item: { to: string }) {
   drawerOpen.value = false
 }
 
-async function logout() { await auth.logout(); router.push('/admin/login') }
+async function logout() { await auth.logout(); router.push('/login') }
 </script>
 <template>
   <div class="admin-shell">

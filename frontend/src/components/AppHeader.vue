@@ -9,10 +9,7 @@ withDefaults(defineProps<{ compact?: boolean; sticky?: boolean }>(), { compact: 
 const site = useSiteStore()
 const auth = useAuthStore()
 const router = useRouter()
-function adminGo() {
-  if (!auth.token) router.push('/admin/login')
-  else router.push('/admin/users')
-}
+function adminGo() { router.push('/admin/users') }
 </script>
 
 <template>

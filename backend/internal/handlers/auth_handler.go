@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -32,6 +33,36 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	token, user, err := h.service.Login(request.Email, request.Password)
 	if err != nil {
 		middleware.JSON(c, http.StatusUnauthorized, contracts.Fail(contracts.AUTH01001, "Invalid email or password."))
+		return
+	}
+	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"token": token, "user": user}))
+}
+
+// Register creates a new account and returns a signed JWT plus the profile, so
+// the user lands signed in. Google SSO registration happens through the same
+// OAuth flow as GoogleStart/GoogleCallback (find-or-create).
+func (h *AuthHandler) Register(c *gin.Context) {
+	var request struct {
+		Name     string `json:"name"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.AUTH01004, "Enter your name, email, and a password of at least 8 characters."))
+		return
+	}
+	token, user, err := h.service.Register(request.Name, request.Email, request.Password)
+	if err != nil {
+		if errors.Is(err, services.ErrEmailTaken) {
+			middleware.JSON(c, http.StatusConflict, contracts.Fail(contracts.AUTH01005, "An account with that email already exists — try signing in."))
+			return
+		}
+		if errors.Is(err, services.ErrInvalidRegistration) {
+			middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.AUTH01004, "Enter your name, a valid email, and a password of at least 8 characters."))
+			return
+		}
+		logrus.WithError(err).Error("registration failed")
+		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.AUTH01004, "Your account could not be created. Please try again."))
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"token": token, "user": user}))

@@ -35,6 +35,7 @@ func New(corsOrigins, uploadsDir string, siteService *services.SiteService, auth
 		}))
 	})
 	v1.POST("/auth/login", authHandler.Login)
+	v1.POST("/auth/register", authHandler.Register)
 	v1.GET("/auth/google", authHandler.GoogleStart)
 	v1.GET("/auth/google/callback", authHandler.GoogleCallback)
 	v1.POST("/ask", aiHandler.Ask)

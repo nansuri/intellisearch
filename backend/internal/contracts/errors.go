@@ -9,6 +9,12 @@ const AUTH01002 = "AUTH01002"
 // AUTH01003 indicates that Google sign-in is unavailable or failed.
 const AUTH01003 = "AUTH01003"
 
+// AUTH01004 indicates that registration data is invalid.
+const AUTH01004 = "AUTH01004"
+
+// AUTH01005 indicates that the email is already registered.
+const AUTH01005 = "AUTH01005"
+
 // AUTH02001 indicates that super-owner access is required.
 const AUTH02001 = "AUTH02001"
 

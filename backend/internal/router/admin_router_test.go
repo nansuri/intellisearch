@@ -422,6 +422,30 @@ func TestSearchHistoryEndpoints(t *testing.T) {
 	}
 }
 
+func TestRegisterEndpoint(t *testing.T) {
+	server, _ := adminTestMux(t)
+
+	// Valid registration returns a token and the new profile.
+	status, payload := call(t, server, http.MethodPost, "/api/v1/auth/register", "", []byte(`{"name":"Registered","email":"registered@example.com","password":"password-123"}`))
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"token"`)) || !bytes.Contains(payload, []byte(`"role":"general_user"`)) {
+		t.Fatalf("register failed: %d %s", status, payload)
+	}
+	// The new account can sign in.
+	if token := loginToken(t, server, "registered@example.com", "password-123"); token == "" {
+		t.Fatal("registered account could not sign in")
+	}
+	// Duplicate email is rejected with AUTH01005.
+	status, payload = call(t, server, http.MethodPost, "/api/v1/auth/register", "", []byte(`{"name":"Jane Again","email":"jane@example.com","password":"password-123"}`))
+	if status != http.StatusConflict || !bytes.Contains(payload, []byte(`"errorCode":"AUTH01005"`)) {
+		t.Fatalf("duplicate register: expected 409 AUTH01005, got %d %s", status, payload)
+	}
+	// Weak password is rejected with AUTH01004.
+	status, payload = call(t, server, http.MethodPost, "/api/v1/auth/register", "", []byte(`{"name":"Weak","email":"weak@example.com","password":"short"}`))
+	if status != http.StatusBadRequest || !bytes.Contains(payload, []byte(`"errorCode":"AUTH01004"`)) {
+		t.Fatalf("weak register: expected 400 AUTH01004, got %d %s", status, payload)
+	}
+}
+
 func TestGoogleSSOEndpoints(t *testing.T) {
 	server, _ := adminTestMux(t)
 
