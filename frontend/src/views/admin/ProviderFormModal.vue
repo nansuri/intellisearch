@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { listOllamaModels, getOllamaHealth, type OllamaHealth, type OllamaModel, type Provider, type ProviderType } from '../../services/api'
+import { getPollinationsAccount, getPollinationsDailyUsage, getPollinationsModels, listOllamaModels, getOllamaHealth, type OllamaHealth, type OllamaModel, type PollinationsAccount, type PollinationsDailyUsage as PollDaily, type PollinationsModel, type Provider, type ProviderType } from '../../services/api'
 import BaseModal from '../../components/BaseModal.vue'
 import FormField from '../../components/FormField.vue'
 
@@ -22,6 +22,30 @@ const ollamaHealth = ref<OllamaHealth | null>(null)
 const ollamaStatus = ref<'idle' | 'loading' | 'ok' | 'error'>('idle')
 const ollamaError = ref('')
 
+// Pollinations account introspection (also proxied through the Go API — the
+// browser never calls Pollinations directly). The provider's stored API key is
+// decrypted server-side; for an unsaved provider the typed key is used.
+const pollAccount = ref<PollinationsAccount | null>(null)
+const pollDaily = ref<PollDaily[]>([])
+const pollModels = ref<PollinationsModel[]>([])
+const pollStatus = ref<'idle' | 'loading' | 'ok' | 'error'>('idle')
+const pollError = ref('')
+
+const isPollinations = computed(() => providerType.value === 'pollinations')
+// The provider being edited is a saved Pollinations provider → resolve its key
+// server-side by id. Otherwise fall back to the typed key + base URL.
+const pollCredentials = computed(() => {
+  if (props.provider?.providerType === 'pollinations' && props.provider.id) return { providerId: props.provider.id }
+  return { apiKey: apiKey.value.trim(), baseUrl: baseUrl.value.trim() || 'https://gen.pollinations.ai' }
+})
+const pollCanLoad = computed(() => Boolean((pollCredentials.value as { providerId?: string }).providerId) || Boolean((pollCredentials.value as { apiKey?: string }).apiKey))
+const pollConnected = computed(() => pollStatus.value === 'ok' && pollAccount.value !== null)
+const pollUsageSummary = computed(() => {
+  const totalRequests = pollDaily.value.reduce((sum, row) => sum + row.requests, 0)
+  const totalCost = pollDaily.value.reduce((sum, row) => sum + row.cost_usd, 0)
+  return { totalRequests, totalCost }
+})
+
 const TYPE_PRESETS: Record<ProviderType, { label: string; baseUrl: string; model: string; needsKey: boolean; baseUrlHint: string }> = {
   ollama: { label: 'Ollama', baseUrl: 'http://localhost:11434', model: 'llama3.2', needsKey: false, baseUrlHint: 'Local server — no API key needed' },
   openai_compatible: { label: 'OpenAI-compatible', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', needsKey: true, baseUrlHint: 'Any OpenAI-compatible /v1/chat/completions endpoint' },
@@ -34,13 +58,17 @@ const modelPlaceholder = computed(() => selectedPreset.value.model)
 const isOllama = computed(() => providerType.value === 'ollama')
 const ollamaConnected = computed(() => ollamaStatus.value === 'ok')
 
-// Real dropdown once the Ollama server's models are known; otherwise the field
-// stays a text input (there is nothing to choose from).
-const showModelSelect = computed(() => isOllama.value && ollamaConnected.value && ollamaModels.value.length > 0)
+// Real dropdown once the server's models are known (Ollama /api/tags or
+// Pollinations /v1/models); otherwise the field stays a text input.
+const showModelSelect = computed(() =>
+  (isOllama.value && ollamaConnected.value && ollamaModels.value.length > 0) ||
+  (isPollinations.value && pollConnected.value && pollModels.value.length > 0),
+)
+const modelSelectCount = computed(() => (isOllama.value ? ollamaModels.value.length : pollModels.value.length))
 // A provider being edited may reference a model that no longer exists on the
 // server — keep it selectable so the form never shows a blank dropdown.
 const modelOptions = computed(() => {
-  const names = ollamaModels.value.map((m) => m.name)
+  const names = isOllama.value ? ollamaModels.value.map((m) => m.name) : pollModels.value.map((m) => m.id)
   if (model.value && !names.includes(model.value)) return [model.value, ...names]
   return names
 })
@@ -59,6 +87,37 @@ function resetOllama() {
   ollamaStatus.value = 'idle'
   ollamaError.value = ''
   modelCustom.value = false
+}
+
+function resetPollinations() {
+  pollAccount.value = null
+  pollDaily.value = []
+  pollModels.value = []
+  pollStatus.value = 'idle'
+  pollError.value = ''
+}
+
+async function loadPollinations() {
+  if (!pollCanLoad.value) return
+  pollStatus.value = 'loading'
+  pollError.value = ''
+  const input = pollCredentials.value
+  try {
+    const [account, daily, models] = await Promise.all([
+      getPollinationsAccount(input),
+      getPollinationsDailyUsage(input, 14),
+      getPollinationsModels(input),
+    ])
+    pollAccount.value = account
+    pollDaily.value = daily.usage || []
+    pollModels.value = models.models || []
+    pollStatus.value = 'ok'
+    // Auto-pick the first model only when nothing is typed yet.
+    if (!model.value && pollModels.value.length) model.value = pollModels.value[0].id
+  } catch (e) {
+    pollStatus.value = 'error'
+    pollError.value = (e as Error).message
+  }
 }
 
 async function loadOllama() {
@@ -80,9 +139,22 @@ async function loadOllama() {
 }
 
 function onBaseUrlChange() {
-  if (!isOllama.value) return
-  resetOllama()
-  if (baseUrl.value.trim()) loadOllama()
+  if (isOllama.value) {
+    resetOllama()
+    if (baseUrl.value.trim()) loadOllama()
+    return
+  }
+  if (isPollinations.value) {
+    resetPollinations()
+    loadPollinations()
+  }
+}
+
+function onApiKeyChange() {
+  if (isPollinations.value) {
+    resetPollinations()
+    if (apiKey.value.trim()) loadPollinations()
+  }
 }
 
 watch(() => props.open, (v) => {
@@ -98,7 +170,9 @@ watch(() => props.open, (v) => {
   parametersError.value = ''
   modelCustom.value = false
   resetOllama()
+  resetPollinations()
   if (isOllama.value && baseUrl.value.trim()) loadOllama()
+  if (isPollinations.value) loadPollinations()
 })
 
 // When the user picks a new provider type, prefill the endpoint + model unless
@@ -110,11 +184,12 @@ function onTypeChange() {
   if (!baseUrl.value || (previous && baseUrl.value === previous.baseUrl)) baseUrl.value = preset.baseUrl
   if (!model.value || (previous && model.value === previous.model)) model.value = preset.model
   lastType = providerType.value
+  resetOllama()
+  resetPollinations()
   if (isOllama.value) {
-    resetOllama()
     if (baseUrl.value.trim()) loadOllama()
-  } else {
-    resetOllama()
+  } else if (isPollinations.value) {
+    loadPollinations()
   }
 }
 
@@ -149,7 +224,7 @@ function submit() {
       <FormField label="Base URL" :hint="selectedPreset.baseUrlHint" :error="baseUrl ? '' : undefined">
         <input v-model="baseUrl" class="text-input" type="url" required :placeholder="selectedPreset.baseUrl" @change="onBaseUrlChange" />
       </FormField>
-      <FormField label="Model" :hint="showModelSelect && !modelCustom ? `${ollamaModels.length} models available on the server` : undefined" :error="model ? '' : undefined">
+      <FormField label="Model" :hint="showModelSelect && !modelCustom ? `${modelSelectCount} models available` : undefined" :error="model ? '' : undefined">
         <select v-if="showModelSelect && !modelCustom" v-model="model" class="text-input" required @change="onModelSelectChange">
           <option v-for="m in modelOptions" :key="m" :value="m">{{ m }}</option>
           <option :value="CUSTOM_MODEL">Type a custom model…</option>
@@ -179,8 +254,54 @@ function submit() {
       </div>
       <p v-else-if="isOllama && ollamaStatus === 'error'" class="ollama-error" role="alert">{{ ollamaError }}</p>
       <FormField v-if="selectedPreset.needsKey" label="API key" hint="Stored encrypted; leave blank to keep the existing key">
-        <input v-model="apiKey" class="text-input" type="password" :placeholder="provider ? 'Keep current key' : (providerType === 'huggingface' ? 'hf_…' : 'pk_… / sk_…')" />
+        <input v-model="apiKey" class="text-input" type="password" :placeholder="provider ? 'Keep current key' : (providerType === 'huggingface' ? 'hf_…' : 'pk_… / sk_…')" @change="onApiKeyChange" />
       </FormField>
+      <FormField v-if="isPollinations" label="Pollinations account" hint="Credits, usage, and models are fetched server-side through the API.">
+        <button type="button" class="base-button button-secondary ollama-load" :disabled="!pollCanLoad || pollStatus === 'loading'" @click="loadPollinations">
+          {{ pollStatus === 'loading' ? 'Checking…' : pollConnected ? 'Refresh account & usage' : 'Load credits & usage' }}
+        </button>
+      </FormField>
+      <div v-if="isPollinations && pollConnected" class="ollama-status poll-status">
+        <div class="ollama-status-row">
+          <span class="ollama-dot" />
+          <span>Balance <strong>{{ pollAccount?.balance?.toLocaleString(undefined, { maximumFractionDigits: 2 }) }}</strong> pollen</span>
+        </div>
+        <template v-if="pollAccount?.key">
+          <div class="poll-key-row">
+            <span class="poll-key-type">{{ pollAccount.key.type }} key</span>
+            <span v-if="pollAccount.key.expiresAt" class="poll-key-meta">expires {{ new Date(pollAccount.key.expiresAt).toLocaleDateString() }}</span>
+            <span v-else class="poll-key-meta">never expires</span>
+            <span v-if="pollAccount.key.pollenBudget != null" class="poll-key-meta">key budget {{ pollAccount.key.pollenBudget }}</span>
+          </div>
+          <p v-if="pollAccount.key.permissions?.account?.length" class="ollama-note">account scopes: {{ pollAccount.key.permissions.account.join(', ') }}</p>
+          <p v-else-if="!pollAccount.key.valid" class="poll-key-invalid">This API key is not valid — check it on enter.pollinations.ai.</p>
+        </template>
+        <template v-if="pollAccount?.profile">
+          <div class="ollama-running-title">Account</div>
+          <div class="ollama-running">
+            <span class="ollama-running-name">{{ pollAccount.profile.githubUsername || 'Pollinations user' }}</span>
+            <span v-if="pollAccount.profile.name" class="ollama-running-stat">{{ pollAccount.profile.name }}</span>
+            <span v-if="pollAccount.profile.email" class="ollama-running-stat">{{ pollAccount.profile.email }}</span>
+          </div>
+        </template>
+        <template v-if="pollDaily.length">
+          <div class="ollama-running-title">Usage · last {{ pollDaily.length }} day{{ pollDaily.length === 1 ? '' : 's' }}</div>
+          <div class="ollama-running">
+            <span class="ollama-running-name">{{ pollUsageSummary.totalRequests }} requests</span>
+            <span class="ollama-running-stat">≈ ${{ pollUsageSummary.totalCost.toFixed(4) }}</span>
+          </div>
+          <div class="poll-daily-table">
+            <div v-for="row in pollDaily.slice(0, 7)" :key="row.date" class="poll-daily-row">
+              <span class="poll-daily-date">{{ row.date }}</span>
+              <span class="poll-daily-model">{{ row.model || '—' }}</span>
+              <span class="poll-daily-stat">{{ row.requests }} req</span>
+              <span class="poll-daily-stat">${{ row.cost_usd.toFixed(4) }}</span>
+            </div>
+          </div>
+        </template>
+        <p v-else class="ollama-note">No usage in the last 14 days.</p>
+      </div>
+      <p v-else-if="isPollinations && pollStatus === 'error'" class="ollama-error" role="alert">{{ pollError }}</p>
       <FormField label="Model parameters (JSON)" :error="parametersError">
         <textarea v-model="parametersText" class="text-input text-area" rows="5" spellcheck="false" />
       </FormField>
@@ -204,4 +325,14 @@ function submit() {
 .ollama-running-stat { color: var(--color-muted); font-size: .74rem; font-variant-numeric: tabular-nums; }
 .ollama-note { margin: 0; color: var(--color-muted); font-size: .76rem; }
 .ollama-error { margin: -6px 0 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--color-danger) 35%, var(--color-border)); border-radius: 10px; background: color-mix(in srgb, var(--color-danger) 8%, var(--color-surface)); color: var(--color-danger); font-size: .78rem; line-height: 1.5; }
+.poll-key-row { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-size: .78rem; }
+.poll-key-type { font-weight: 720; text-transform: uppercase; letter-spacing: .04em; }
+.poll-key-meta { color: var(--color-muted); font-size: .74rem; }
+.poll-key-invalid { margin: 2px 0 0; color: var(--color-danger); font-size: .76rem; }
+.poll-daily-table { display: grid; gap: 2px; margin-top: 4px; }
+.poll-daily-row { display: grid; grid-template-columns: 92px 1fr auto auto; gap: 10px; align-items: baseline; font-size: .74rem; }
+.poll-daily-date { color: var(--color-muted); font-variant-numeric: tabular-nums; }
+.poll-daily-model { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.poll-daily-stat { color: var(--color-muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 480px) { .poll-daily-row { grid-template-columns: 82px 1fr auto; } .poll-daily-row .poll-daily-stat:nth-of-type(2) { display: none; } }
 </style>

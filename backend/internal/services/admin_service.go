@@ -41,6 +41,24 @@ func (s *AdminService) Provider(id uuid.UUID) (entities.AIProvider, error) {
 	return s.providers.ByID(id)
 }
 
+// PollinationsCredentials resolves a stored Pollinations provider's base URL
+// and decrypted API key for the specialized Pollinations account endpoints.
+// The key is decrypted server-side and never returned to the browser.
+func (s *AdminService) PollinationsCredentials(id uuid.UUID) (baseURL, apiKey string, err error) {
+	provider, err := s.providers.ByID(id)
+	if err != nil {
+		return "", "", ErrProviderNotFound
+	}
+	if provider.ProviderType != "pollinations" || provider.APIKeyEncrypted == nil || *provider.APIKeyEncrypted == "" {
+		return "", "", ErrProviderInvalid
+	}
+	decrypted, err := DecryptSecret(*provider.APIKeyEncrypted, s.key)
+	if err != nil {
+		return "", "", ErrProviderInvalid
+	}
+	return provider.BaseURL, decrypted, nil
+}
+
 // CreateProvider adds a provider; a supplied API key is encrypted at rest and
 // a new active provider deactivates any other active row.
 func (s *AdminService) CreateProvider(name, providerType, baseURL, model string, parameters json.RawMessage, apiKey string, isActive bool) (entities.AIProvider, error) {

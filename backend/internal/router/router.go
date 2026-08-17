@@ -11,7 +11,7 @@ import (
 	"intellisearch/internal/services"
 )
 
-func New(corsOrigins, uploadsDir string, siteService *services.SiteService, authHandler *handlers.AuthHandler, userHandler *handlers.UserHandler, sessionHandler *handlers.SessionHandler, aiHandler *handlers.AIHandler, adminHandler *handlers.AdminHandler, appsHandler *handlers.AppsHandler, authService *services.AuthService) *gin.Engine {
+func New(corsOrigins, uploadsDir string, siteService *services.SiteService, authHandler *handlers.AuthHandler, userHandler *handlers.UserHandler, sessionHandler *handlers.SessionHandler, aiHandler *handlers.AIHandler, adminHandler *handlers.AdminHandler, appsHandler *handlers.AppsHandler, pollinationsHandler *handlers.PollinationsHandler, authService *services.AuthService) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery(), middleware.ErrorHandler())
 	r.Use(cors(corsOrigins))
@@ -74,6 +74,13 @@ func New(corsOrigins, uploadsDir string, siteService *services.SiteService, auth
 	admin.POST("/ai/providers", adminHandler.CreateProvider)
 	admin.GET("/ai/ollama/models", adminHandler.OllamaModels)
 	admin.GET("/ai/ollama/health", adminHandler.OllamaHealth)
+	// Pollinations account introspection (specialized handler, still under the
+	// AI admin surface — the AI handler remains the single interface for AI).
+	admin.POST("/ai/pollinations/account", pollinationsHandler.Account)
+	admin.POST("/ai/pollinations/usage", pollinationsHandler.Usage)
+	admin.POST("/ai/pollinations/usage/daily", pollinationsHandler.DailyUsage)
+	admin.POST("/ai/pollinations/models", pollinationsHandler.Models)
+	admin.POST("/ai/pollinations/upload", pollinationsHandler.Upload)
 	admin.PATCH("/ai/providers/:id", adminHandler.UpdateProvider)
 	admin.DELETE("/ai/providers/:id", adminHandler.DeleteProvider)
 	admin.GET("/ai/queue-config", adminHandler.QueueConfig)

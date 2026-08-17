@@ -106,6 +106,15 @@ const ADMN05003 = "ADMN05003"
 // ADMN06001 indicates the Ollama server could not be reached or the base URL is invalid.
 const ADMN06001 = "ADMN06001"
 
+// ADMN07001 indicates a Pollinations account request failed or could not be reached.
+const ADMN07001 = "ADMN07001"
+
+// ADMN07002 indicates the Pollinations API key is invalid or unauthorized.
+const ADMN07002 = "ADMN07002"
+
+// ADMN07003 indicates a Pollinations media upload failed.
+const ADMN07003 = "ADMN07003"
+
 // NOTE01001 indicates the user's notes could not be loaded.
 const NOTE01001 = "NOTE01001"
 

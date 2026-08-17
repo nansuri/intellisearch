@@ -75,8 +75,9 @@ func adminTestMux(t *testing.T) (*httptest.Server, *gorm.DB) {
 	t.Cleanup(aiHandler.Stop)
 	adminHandler := handlers.NewAdminHandler(userService, adminService, statsService, services.NewOllamaService())
 	appsHandler := handlers.NewAppsHandler(services.NewNoteService(repositories.NewNoteRepository(db)), services.NewTranslateService(""), allowingLimiter{})
+	pollinationsHandler := handlers.NewPollinationsHandler(adminService, services.NewPollinationsService("https://media.pollinations.ai"))
 	siteService := services.NewSiteService(repositories.NewSiteRepository(db))
-	mux := New("*", t.TempDir(), siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService, historyService), nil, aiHandler, adminHandler, appsHandler, authService)
+	mux := New("*", t.TempDir(), siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService, historyService), nil, aiHandler, adminHandler, appsHandler, pollinationsHandler, authService)
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 	return server, db
@@ -278,8 +279,12 @@ func TestAdminLogoDeleteAndTrends(t *testing.T) {
 	}
 	var trends struct {
 		Data struct {
-			Daily  []struct{ Count int64 `json:"count"` } `json:"daily"`
-			Weekly []struct{ Count int64 `json:"count"` } `json:"weekly"`
+			Daily []struct {
+				Count int64 `json:"count"`
+			} `json:"daily"`
+			Weekly []struct {
+				Count int64 `json:"count"`
+			} `json:"weekly"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(payload, &trends); err != nil {
@@ -567,6 +572,80 @@ func TestAdminOllamaEndpoints(t *testing.T) {
 	status, payload = call(t, server, http.MethodGet, "/api/v1/admin/ai/ollama/models?baseUrl=ftp%3A%2F%2Fnope", ownerToken, nil)
 	if status != http.StatusBadRequest || !bytes.Contains(payload, []byte(`"errorCode":"ADMN06001"`)) {
 		t.Fatalf("invalid ollama url: expected 400 ADMN06001, got %d %s", status, payload)
+	}
+}
+
+func TestAdminPollinationsEndpoints(t *testing.T) {
+	server, _ := adminTestMux(t)
+	ownerToken := loginToken(t, server, "owner@example.com", "owner-pass")
+	janeToken := loginToken(t, server, "jane@example.com", "jane-pass")
+
+	// Fake Pollinations account + media API.
+	poll := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/account/balance":
+			_, _ = w.Write([]byte(`{"balance": 9.5}`))
+		case "/account/profile":
+			_, _ = w.Write([]byte(`{"githubUsername":"dev","image":null,"communityEndpointsAllowed":false}`))
+		case "/account/key":
+			_, _ = w.Write([]byte(`{"valid":true,"type":"secret","permissions":{"account":["usage"]},"rateLimitEnabled":false}`))
+		case "/account/usage":
+			_, _ = w.Write([]byte(`{"usage":[{"timestamp":"2026-08-17 10:00:00","model":"openai","cost_usd":0.001}],"count":1}`))
+		case "/account/usage/daily":
+			_, _ = w.Write([]byte(`{"usage":[{"date":"2026-08-17","requests":3,"cost_usd":0.003}],"count":1}`))
+		case "/v1/models":
+			_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"openai","object":"model"},{"id":"flux","object":"model"}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer poll.Close()
+
+	// Save a Pollinations provider pointing at the fake account API.
+	status, payload := call(t, server, http.MethodPost, "/api/v1/admin/ai/providers", ownerToken, []byte(`{"name":"polli","providerType":"pollinations","baseUrl":"`+poll.URL+`","model":"openai","apiKey":"sk-polli","isActive":true}`))
+	if status != http.StatusOK {
+		t.Fatalf("create pollinations provider failed: %d %s", status, payload)
+	}
+	var created struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(payload, &created); err != nil || created.Data.ID == "" {
+		t.Fatal("provider missing id", payload)
+	}
+
+	// General users are forbidden.
+	status, _ = call(t, server, http.MethodPost, "/api/v1/admin/ai/pollinations/account", janeToken, []byte(`{"providerId":"`+created.Data.ID+`"}`))
+	if status != http.StatusForbidden {
+		t.Fatalf("expected 403 for general user, got %d", status)
+	}
+
+	// Super owner reads account (balance + profile + key) via providerId — the
+	// stored API key is decrypted server-side, never sent to the browser.
+	status, payload = call(t, server, http.MethodPost, "/api/v1/admin/ai/pollinations/account", ownerToken, []byte(`{"providerId":"`+created.Data.ID+`"}`))
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"balance":9.5`)) || !bytes.Contains(payload, []byte(`"githubUsername":"dev"`)) || !bytes.Contains(payload, []byte(`"valid":true`)) {
+		t.Fatalf("pollinations account failed: %d %s", status, payload)
+	}
+	// Usage + daily usage.
+	status, payload = call(t, server, http.MethodPost, "/api/v1/admin/ai/pollinations/usage?days=7", ownerToken, []byte(`{"providerId":"`+created.Data.ID+`"}`))
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"cost_usd":0.001`)) || !bytes.Contains(payload, []byte(`"count":1`)) {
+		t.Fatalf("pollinations usage failed: %d %s", status, payload)
+	}
+	status, payload = call(t, server, http.MethodPost, "/api/v1/admin/ai/pollinations/usage/daily?days=7", ownerToken, []byte(`{"providerId":"`+created.Data.ID+`"}`))
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"requests":3`)) {
+		t.Fatalf("pollinations daily usage failed: %d %s", status, payload)
+	}
+	// Models feed the provider form dropdown.
+	status, payload = call(t, server, http.MethodPost, "/api/v1/admin/ai/pollinations/models", ownerToken, []byte(`{"providerId":"`+created.Data.ID+`"}`))
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"id":"openai"`)) || !bytes.Contains(payload, []byte(`"id":"flux"`)) {
+		t.Fatalf("pollinations models failed: %d %s", status, payload)
+	}
+	// A missing/unknown provider is a 400.
+	status, _ = call(t, server, http.MethodPost, "/api/v1/admin/ai/pollinations/account", ownerToken, []byte(`{"providerId":"`+uuid.NewString()+`"}`))
+	if status != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unknown provider, got %d", status)
 	}
 }
 
