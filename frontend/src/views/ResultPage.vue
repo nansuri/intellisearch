@@ -27,6 +27,11 @@ const query = computed(() => String(route.query.q || '').trim())
 const urlSessionId = computed(() => String(route.query.session || '').trim())
 // Ask mode: 'enhanced' runs the AI pipeline (default), 'search' returns raw web results.
 const mode = ref<AskMode>(route.query.mode === 'search' ? 'search' : 'enhanced')
+// Google-style result tabs: All shows the answer + sources, Images the image grid.
+const activeTab = ref<'all' | 'images'>('all')
+// Send-mode toggle next to the Ask button: follow-up continues the thread,
+// new search starts fresh with the typed question.
+const followUpMode = ref(true)
 const loading = ref(false)
 const restoring = ref(false)
 const error = ref<string | null>(null)
@@ -147,6 +152,8 @@ function resetState() {
   locationMissing.value = false
   followUpSeq = 0
   mode.value = route.query.mode === 'search' ? 'search' : 'enhanced'
+  activeTab.value = 'all'
+  followUpMode.value = true
 }
 
 async function bootstrap() {
@@ -249,19 +256,19 @@ async function followUp(question: string) {
 }
 
 function onAsk(question: string) {
-  if (sessionId.value && question.trim() === query.value) return
+  if (sessionId.value && followUpMode.value && question.trim() === query.value) return
   if (sessionId.value) {
-    followUp(question)
+    if (followUpMode.value) {
+      followUp(question)
+      return
+    }
+    // "New search" mode: drop the thread and run the typed question fresh.
+    clearSearchSession()
+    resetState()
+    router.push({ path: '/search', query: { q: question, mode: mode.value } })
     return
   }
   router.push({ path: '/search', query: { q: question, mode: mode.value } })
-}
-
-// Ends the follow-up thread and returns to the main page for a fresh search.
-function startNewSearch() {
-  clearSearchSession()
-  resetState()
-  router.push('/')
 }
 
 // Switches a search-only result to the enhanced pipeline and re-runs it.
@@ -326,9 +333,10 @@ watch(
         <AskBox
           variant="google"
           :placeholder="sessionId ? 'Ask a follow-up…' : 'Ask a question, explore an idea…'"
-          :follow-up="Boolean(sessionId)"
+          :has-session="Boolean(sessionId)"
+          :follow-up="followUpMode"
           @submit="onAsk"
-          @new-search="startNewSearch"
+          @update:follow-up="followUpMode = $event"
         />
       </template>
     </AppHeader>
@@ -354,71 +362,84 @@ watch(
       </div>
       <ErrorBanner v-else-if="error && !loading && !restoring" :message="error" @retry="runInitial" />
 
-      <article v-if="loading || restoring" class="summary-card">
-        <div class="section-label">{{ mode === 'search' ? 'Web results' : 'AI overview' }}</div>
-        <div class="skeleton-line" />
-        <div class="skeleton-line skeleton-line--short" />
-        <div class="skeleton-line" />
-        <div class="summary-note">{{ restoring ? 'Loading your previous answer…' : mode === 'search' ? 'Searching the web…' : 'Searching the web and reading the best sources…' }}</div>
-      </article>
-
-      <template v-else-if="mode === 'enhanced'">
-        <CollapsibleAnswer
-          label="AI overview"
-          :answer="answer"
-          :sources="sources"
-          :collapsed="primaryCollapsed"
-          @update:collapsed="(value) => { primaryCollapsed = value; persistState() }"
-        />
-        <ImageGrid v-if="images.length" :images="images" />
+      <template v-if="loading || restoring">
+        <article class="summary-card">
+          <div class="section-label">{{ mode === 'search' ? 'Web results' : 'AI overview' }}</div>
+          <div class="skeleton-line" />
+          <div class="skeleton-line skeleton-line--short" />
+          <div class="skeleton-line" />
+          <div class="summary-note">{{ restoring ? 'Loading your previous answer…' : mode === 'search' ? 'Searching the web…' : 'Searching the web and reading the best sources…' }}</div>
+        </article>
       </template>
 
-      <section v-else class="search-results-only">
-        <div class="search-results-head">
-          <div>
-            <div class="section-label">Web results</div>
-            <h2 class="search-results-title">Top matches</h2>
-          </div>
-          <button type="button" class="base-button button-secondary search-upgrade" @click="upgradeToEnhanced">Ask AI to write it</button>
+      <template v-else>
+        <div v-if="images.length" class="result-tabs" role="tablist" aria-label="Result type">
+          <button type="button" role="tab" :aria-selected="activeTab === 'all'" :class="{ active: activeTab === 'all' }" @click="activeTab = 'all'">All</button>
+          <button type="button" role="tab" :aria-selected="activeTab === 'images'" :class="{ active: activeTab === 'images' }" @click="activeTab = 'images'">Images</button>
         </div>
-        <p class="search-only-note">Summary pulled from the top search results — no AI used. Ask AI for a synthesized, cited answer.</p>
-        <CollapsibleAnswer
-          v-if="answer"
-          label="Summary from top results"
-          :answer="answer"
-          :sources="sources"
-          :collapsed="primaryCollapsed"
-          @update:collapsed="(value) => { primaryCollapsed = value; persistState() }"
-        />
-        <ImageGrid v-if="images.length" :images="images" />
-        <div v-if="!answer && sources.length" class="sources">
-          <div class="sources-heading"><h2>Results</h2><span>{{ sources.length }} found</span></div>
-          <SourceCard v-for="source in sources" :key="source.position" :source="source" />
-        </div>
-        <div v-if="!answer && !sources.length" class="empty-sources">
-          <div class="empty-source-copy">
-            <h2>No web results found</h2>
-            <p>Try rewording your question, or submit a URL for the AI to read that page directly.</p>
-          </div>
-          <div class="url-ask-wrap">
-            <UrlAskBox @submit="submitUrl" />
-            <p v-if="urlLoading" class="empty-note">Reading that page…</p>
-            <p v-else-if="urlError" class="empty-note empty-note--error">{{ urlError }}</p>
-          </div>
-        </div>
-      </section>
 
-      <section v-if="!loading && !restoring && mode === 'enhanced' && !sources.length && !primaryCollapsed" class="empty-sources" :class="{ 'empty-sources--compact': Boolean(answer) }">
-        <div class="empty-source-copy">
-          <h2 v-if="!answer">No web sources yet</h2>
-          <p>{{ answer ? 'No web sources for this answer. Submit a URL to read a specific page.' : 'Ask a different question, or submit a URL and the AI will read that page directly.' }}</p>
-        </div>
-        <div class="url-ask-wrap">
-          <UrlAskBox @submit="submitUrl" />
-          <p v-if="urlLoading" class="empty-note">Reading that page…</p>
-          <p v-else-if="urlError" class="empty-note empty-note--error">{{ urlError }}</p>
-        </div>
-      </section>
+        <template v-if="activeTab === 'all'">
+          <template v-if="mode === 'enhanced'">
+            <CollapsibleAnswer
+              label="AI overview"
+              :answer="answer"
+              :sources="sources"
+              :collapsed="primaryCollapsed"
+              @update:collapsed="(value) => { primaryCollapsed = value; persistState() }"
+            />
+          </template>
+
+          <section v-else class="search-results-only">
+            <div class="search-results-head">
+              <div>
+                <div class="section-label">Web results</div>
+                <h2 class="search-results-title">Top matches</h2>
+              </div>
+              <button type="button" class="base-button button-secondary search-upgrade" @click="upgradeToEnhanced">Ask AI to write it</button>
+            </div>
+            <p class="search-only-note">Summary pulled from the top search results — no AI used. Ask AI for a synthesized, cited answer.</p>
+            <CollapsibleAnswer
+              v-if="answer"
+              label="Summary from top results"
+              :answer="answer"
+              :sources="sources"
+              :collapsed="primaryCollapsed"
+              @update:collapsed="(value) => { primaryCollapsed = value; persistState() }"
+            />
+            <div v-if="!answer && sources.length" class="sources">
+              <div class="sources-heading"><h2>Results</h2><span>{{ sources.length }} found</span></div>
+              <SourceCard v-for="source in sources" :key="source.position" :source="source" />
+            </div>
+            <div v-if="!answer && !sources.length" class="empty-sources">
+              <div class="empty-source-copy">
+                <h2>No web results found</h2>
+                <p>Try rewording your question, or submit a URL for the AI to read that page directly.</p>
+              </div>
+              <div class="url-ask-wrap">
+                <UrlAskBox @submit="submitUrl" />
+                <p v-if="urlLoading" class="empty-note">Reading that page…</p>
+                <p v-else-if="urlError" class="empty-note empty-note--error">{{ urlError }}</p>
+              </div>
+            </div>
+          </section>
+
+          <section v-if="mode === 'enhanced' && !sources.length && !primaryCollapsed" class="empty-sources" :class="{ 'empty-sources--compact': Boolean(answer) }">
+            <div class="empty-source-copy">
+              <h2 v-if="!answer">No web sources yet</h2>
+              <p>{{ answer ? 'No web sources for this answer. Submit a URL to read a specific page.' : 'Ask a different question, or submit a URL and the AI will read that page directly.' }}</p>
+            </div>
+            <div class="url-ask-wrap">
+              <UrlAskBox @submit="submitUrl" />
+              <p v-if="urlLoading" class="empty-note">Reading that page…</p>
+              <p v-else-if="urlError" class="empty-note empty-note--error">{{ urlError }}</p>
+            </div>
+          </section>
+        </template>
+
+        <section v-else-if="images.length" class="image-tab-content">
+          <ImageGrid :images="images" />
+        </section>
+      </template>
 
       <section v-if="thread.length" class="follow-up-thread">
         <div v-if="thread.some((e) => e.loading || e.highlighted)" class="follow-up-thread-hint">
@@ -492,6 +513,36 @@ watch(
   letter-spacing: .06em;
   text-transform: uppercase;
 }
+.result-tabs {
+  display: flex;
+  gap: 2px;
+  margin-top: 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+.result-tabs button {
+  position: relative;
+  padding: 10px 14px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: .84rem;
+  font-weight: 640;
+  cursor: pointer;
+  transition: color .16s ease;
+}
+.result-tabs button:hover { color: var(--color-text); }
+.result-tabs button.active { color: var(--color-primary); }
+.result-tabs button.active::after {
+  content: '';
+  position: absolute;
+  right: 10px;
+  bottom: -1px;
+  left: 10px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--color-primary);
+}
+.image-tab-content { padding-top: 6px; }
 .result-location-tag { color: var(--color-primary); font-weight: 680; }
 .location-note {
   margin: 12px 0 0;

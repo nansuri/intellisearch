@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import BaseButton from './BaseButton.vue'
 import type { AskMode } from '../services/api'
 
-const props = withDefaults(defineProps<{ variant?: 'default' | 'google'; compact?: boolean; helperText?: string; suggestions?: string[]; showPrompt?: boolean; placeholder?: string; mode?: AskMode; modeToggle?: boolean; followUp?: boolean }>(), {
+const props = withDefaults(defineProps<{ variant?: 'default' | 'google'; compact?: boolean; helperText?: string; suggestions?: string[]; showPrompt?: boolean; placeholder?: string; mode?: AskMode; modeToggle?: boolean; hasSession?: boolean; followUp?: boolean }>(), {
   variant: 'default',
   compact: false,
   helperText: '',
@@ -12,9 +12,10 @@ const props = withDefaults(defineProps<{ variant?: 'default' | 'google'; compact
   placeholder: '',
   mode: 'enhanced',
   modeToggle: false,
+  hasSession: false,
   followUp: false,
 })
-const emit = defineEmits<{ submit: [question: string, mode: AskMode]; 'update:mode': [mode: AskMode]; 'new-search': [] }>()
+const emit = defineEmits<{ submit: [question: string, mode: AskMode]; 'update:mode': [mode: AskMode]; 'update:followUp': [value: boolean] }>()
 const value = ref('')
 
 const activeMode = computed<AskMode>(() => props.mode || 'enhanced')
@@ -35,6 +36,17 @@ function setMode(mode: AskMode) { emit('update:mode', mode) }
       <svg v-if="props.variant === 'google'" class="ask-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2" /><path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
       <span v-if="props.showPrompt" class="ask-prompt" aria-hidden="true">Ask</span>
       <input v-model="value" aria-label="Ask a question" :placeholder="props.placeholder || (props.variant === 'google' ? 'Ask a question, explore an idea…' : props.compact ? 'Ask a follow-up' : 'Ask a question, explore an idea…')" />
+      <button
+        v-if="props.hasSession"
+        type="button"
+        class="ask-send-mode"
+        :class="{ 'ask-send-mode--active': props.followUp }"
+        :title="props.followUp ? 'Sending as a follow-up — click to start a new search' : 'Will start a new search — click to follow up instead'"
+        @click="emit('update:followUp', !props.followUp)"
+      >
+        <span class="ask-send-mode-dot" />
+        {{ props.followUp ? 'Follow-up' : 'New search' }}
+      </button>
       <BaseButton type="submit" variant="primary">{{ submitLabel }}</BaseButton>
     </form>
 
@@ -60,12 +72,6 @@ function setMode(mode: AskMode) { emit('update:mode', mode) }
         Search
       </button>
       <span class="ask-mode-hint">{{ activeMode === 'search' ? 'Summary from results · no AI used' : 'AI answer + cited sources' }}</span>
-    </div>
-
-    <div v-if="props.followUp" class="ask-followup-note">
-      <span class="ask-followup-dot" />
-      <span class="ask-followup-copy">Sending as a follow-up to this search</span>
-      <button type="button" class="ask-new-search" @click="emit('new-search')">Start new search</button>
     </div>
 
     <p v-if="props.helperText" class="ask-helper">{{ props.helperText }}</p>
@@ -109,32 +115,30 @@ function setMode(mode: AskMode) { emit('update:mode', mode) }
 .ask-mode-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-muted); transition: background .16s ease; }
 .ask-mode button.active .ask-mode-dot { background: var(--color-primary); }
 .ask-mode-hint { margin-left: 6px; padding-left: 8px; border-left: 1px solid var(--color-border); color: var(--color-muted); font-size: .7rem; }
-.ask-followup-note {
+.ask-send-mode {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-  padding: 6px 12px;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 26%, var(--color-border));
+  gap: 6px;
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+  background: var(--color-surface-subtle);
   color: var(--color-muted);
   font-size: .74rem;
-}
-.ask-followup-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-primary); flex: 0 0 auto; }
-.ask-followup-copy { white-space: nowrap; }
-.ask-new-search {
-  padding: 2px 8px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--color-primary);
-  cursor: pointer;
-  font-size: .72rem;
   font-weight: 720;
+  cursor: pointer;
   white-space: nowrap;
-  transition: background .14s ease;
+  transition: border-color .16s ease, color .16s ease, background .16s ease;
 }
-.ask-new-search:hover { background: color-mix(in srgb, var(--color-primary) 12%, transparent); }
+.ask-send-mode:hover { border-color: color-mix(in srgb, var(--color-primary) 42%, var(--color-border)); }
+.ask-send-mode--active {
+  border-color: color-mix(in srgb, var(--color-primary) 36%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary) 9%, var(--color-surface));
+  color: var(--color-primary);
+}
+.ask-send-mode-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+@media (max-width: 520px) { .ask-send-mode { min-height: 34px; padding: 0 10px; font-size: .7rem; } }
 @media (max-width: 520px) { .ask-mode-hint { display: none; } }
 </style>
