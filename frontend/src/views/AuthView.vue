@@ -119,7 +119,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.auth-page { position: relative; display: grid; place-items: center; min-height: 100dvh; padding: 24px; overflow: hidden; background: var(--color-bg); color: var(--color-text); }
+.auth-page { position: relative; display: grid; place-items: center; min-height: calc(100dvh - 80px); padding: 24px; overflow: hidden; background: var(--color-bg); color: var(--color-text); }
 .auth-top { position: absolute; top: 20px; right: clamp(20px, 4vw, 56px); z-index: 3; }
 
 /* Aurora background blobs */
@@ -187,5 +187,13 @@ onMounted(() => {
 @keyframes auth-rise { from { opacity: 0; transform: translateY(10px); } }
 @keyframes auth-out { to { opacity: 0; transform: translateY(-14px) scale(.98); } }
 @keyframes check-pop { from { opacity: 0; transform: scale(.4) rotate(-20deg); } }
+@media (max-width: 520px) {
+  .auth-page { padding: 16px; }
+  .auth-card { padding: 30px 22px 26px; border-radius: 22px; }
+  .auth-top { top: 14px; right: 16px; }
+  .auth-card h1 { font-size: 1.5rem; }
+  .auth-brand { margin-bottom: 20px; }
+  .auth-sub { margin-bottom: 18px; }
+}
 @media (prefers-reduced-motion: reduce) { .auth-blob, .auth-card, .auth-card > *, .auth-check { animation: none; } }
 </style>

@@ -4,6 +4,8 @@ import MainPage from '../views/MainPage.vue'
 import ResultPage from '../views/ResultPage.vue'
 import AccountSettings from '../views/AccountSettings.vue'
 import HistoryView from '../views/HistoryView.vue'
+import NotesView from '../views/NotesView.vue'
+import TranslatorView from '../views/TranslatorView.vue'
 import AuthView from '../views/AuthView.vue'
 import AuthCallback from '../views/AuthCallback.vue'
 
@@ -14,6 +16,8 @@ const routes = [
   { path: '/search', component: ResultPage },
   { path: '/account', component: AccountSettings, meta: { requiresAuth: true } },
   { path: '/history', component: HistoryView, meta: { requiresAuth: true } },
+  { path: '/notes', component: NotesView, meta: { requiresAuth: true } },
+  { path: '/translator', component: TranslatorView, meta: { requiresAuth: true } },
   { path: '/login', component: AuthView, meta: { publicAuth: true } },
   { path: '/register', redirect: () => '/login?mode=register' },
   // Login is unified for every account type; keep the old admin path redirecting

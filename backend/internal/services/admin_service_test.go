@@ -131,12 +131,13 @@ func TestAdminSiteSettingsValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	admin := NewAdminService(repositories.NewProviderRepository(db), repositories.NewQueueConfigRepository(db), repositories.NewSiteRepository(db), "k", t.TempDir())
-	if _, err := admin.UpdateSiteSettings("", nil); !errors.Is(err, ErrSiteSettingsInvalid) {
+	if _, err := admin.UpdateSiteSettings("", nil, nil); !errors.Is(err, ErrSiteSettingsInvalid) {
 		t.Fatalf("expected ErrSiteSettingsInvalid, got %v", err)
 	}
 	tagline := "Research, distilled"
-	settings, err := admin.UpdateSiteSettings("Acme Search", &tagline)
-	if err != nil || settings.SiteName != "Acme Search" || settings.Tagline == nil {
+	copyright := "Acme Search"
+	settings, err := admin.UpdateSiteSettings("Acme Search", &tagline, &copyright)
+	if err != nil || settings.SiteName != "Acme Search" || settings.Tagline == nil || settings.Copyright == nil || *settings.Copyright != "Acme Search" {
 		t.Fatalf("unexpected settings: %#v err=%v", settings, err)
 	}
 }

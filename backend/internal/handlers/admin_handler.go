@@ -291,14 +291,15 @@ func (h *AdminHandler) SiteSettings(c *gin.Context) {
 
 func (h *AdminHandler) UpdateSiteSettings(c *gin.Context) {
 	var request struct {
-		SiteName string  `json:"siteName"`
-		Tagline  *string `json:"tagline"`
+		SiteName  string  `json:"siteName"`
+		Tagline   *string `json:"tagline"`
+		Copyright *string `json:"copyright"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
 		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN05001, "Enter a valid site name."))
 		return
 	}
-	settings, err := h.admin.UpdateSiteSettings(request.SiteName, request.Tagline)
+	settings, err := h.admin.UpdateSiteSettings(request.SiteName, request.Tagline, request.Copyright)
 	if err != nil {
 		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN05001, "That site configuration is not valid."))
 		return

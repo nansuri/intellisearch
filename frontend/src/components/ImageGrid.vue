@@ -77,4 +77,7 @@ defineProps<{ images: ImageItem[] }>()
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+@media (max-width: 480px) {
+  .image-grid-cards { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
+}
 </style>

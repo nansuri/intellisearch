@@ -11,7 +11,7 @@ import (
 	"intellisearch/internal/services"
 )
 
-func New(corsOrigins, uploadsDir string, siteService *services.SiteService, authHandler *handlers.AuthHandler, userHandler *handlers.UserHandler, sessionHandler *handlers.SessionHandler, aiHandler *handlers.AIHandler, adminHandler *handlers.AdminHandler, authService *services.AuthService) *gin.Engine {
+func New(corsOrigins, uploadsDir string, siteService *services.SiteService, authHandler *handlers.AuthHandler, userHandler *handlers.UserHandler, sessionHandler *handlers.SessionHandler, aiHandler *handlers.AIHandler, adminHandler *handlers.AdminHandler, appsHandler *handlers.AppsHandler, authService *services.AuthService) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery(), middleware.ErrorHandler())
 	r.Use(cors(corsOrigins))
@@ -31,6 +31,7 @@ func New(corsOrigins, uploadsDir string, siteService *services.SiteService, auth
 			"logoUrl":          site.LogoURL,
 			"faviconUrl":       site.FaviconURL,
 			"tagline":          site.Tagline,
+			"copyright":        site.Copyright,
 			"googleSsoEnabled": authService.GoogleConfigured(),
 		}))
 	})
@@ -49,6 +50,14 @@ func New(corsOrigins, uploadsDir string, siteService *services.SiteService, auth
 	protected.GET("/me/history", userHandler.History)
 	protected.GET("/me/history/suggestions", userHandler.Suggestions)
 	protected.DELETE("/me/history", userHandler.ClearHistory)
+	// Mini apps: notes (personal, incl. save-summary) and translator (proxied
+	// server-side to the LibreTranslate container).
+	protected.GET("/me/notes", appsHandler.ListNotes)
+	protected.POST("/me/notes", appsHandler.CreateNote)
+	protected.PATCH("/me/notes/:id", appsHandler.UpdateNote)
+	protected.DELETE("/me/notes/:id", appsHandler.DeleteNote)
+	protected.GET("/translate/languages", appsHandler.TranslateLanguages)
+	protected.POST("/translate", appsHandler.Translate)
 	protected.POST("/auth/logout", middleware.RequireSuperOwner(), authHandler.Logout)
 
 	admin := protected.Group("/admin")

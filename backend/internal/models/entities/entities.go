@@ -42,21 +42,24 @@ type User struct {
 }
 
 type SiteSettings struct {
-	ID          uint      `gorm:"primaryKey" json:"-"`
-	SiteName    string    `gorm:"not null" json:"siteName"`
-	LogoURL     *string   `json:"logoUrl"`
-	FaviconURL  *string   `json:"faviconUrl"`
-	Tagline     *string   `json:"tagline"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID         uint    `gorm:"primaryKey" json:"-"`
+	SiteName   string  `gorm:"not null" json:"siteName"`
+	LogoURL    *string `json:"logoUrl"`
+	FaviconURL *string `json:"faviconUrl"`
+	Tagline    *string `json:"tagline"`
+	// Copyright is the short legal line rendered in the site footer
+	// ("© 2026 Acme Search"). Null falls back to the site name.
+	Copyright *string   `json:"copyright"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type AIQueueConfig struct {
-	ID                   uint      `gorm:"primaryKey" json:"-"`
-	MaxConcurrent        int       `gorm:"not null" json:"maxConcurrent"`
-	MaxQueueSize         int       `gorm:"not null" json:"maxQueueSize"`
-	RequestTimeoutMS     int       `gorm:"not null" json:"requestTimeoutMs"`
-	PerUserRateLimit     int       `gorm:"not null" json:"perUserRateLimit"`
-	SuggestionCacheHours int       `gorm:"not null;default:6" json:"suggestionCacheHours"`
+	ID                   uint `gorm:"primaryKey" json:"-"`
+	MaxConcurrent        int  `gorm:"not null" json:"maxConcurrent"`
+	MaxQueueSize         int  `gorm:"not null" json:"maxQueueSize"`
+	RequestTimeoutMS     int  `gorm:"not null" json:"requestTimeoutMs"`
+	PerUserRateLimit     int  `gorm:"not null" json:"perUserRateLimit"`
+	SuggestionCacheHours int  `gorm:"not null;default:6" json:"suggestionCacheHours"`
 	// DefaultDailyQuota is the daily AI-usage quota applied to newly registered
 	// users (password or Google SSO). 0 means unlimited, matching the per-user
 	// AIDailyQuota semantics; the Owner Control Panel can change it anytime and
@@ -151,6 +154,20 @@ type SearchHistory struct {
 	SessionID *uuid.UUID `gorm:"type:uuid" json:"sessionId,omitempty"`
 	MessageID *uuid.UUID `gorm:"type:uuid" json:"messageId,omitempty"`
 	CreatedAt time.Time  `gorm:"index:idx_search_history_user,priority:2" json:"createdAt"`
+}
+
+// Note is a user-owned mini-app note. It doubles as a "save summary to
+// notes" target from the result page, so it optionally links back to the
+// search (source query + session) that produced the content.
+type Note struct {
+	ID          uint64     `gorm:"primaryKey" json:"id"`
+	UserID      uuid.UUID  `gorm:"type:uuid;not null;index:idx_notes_user,priority:1" json:"userId"`
+	Title       string     `gorm:"not null" json:"title"`
+	Content     string     `gorm:"type:text;not null" json:"content"`
+	SourceQuery string     `gorm:"type:text" json:"sourceQuery,omitempty"`
+	SessionID   *uuid.UUID `gorm:"type:uuid" json:"sessionId,omitempty"`
+	CreatedAt   time.Time  `gorm:"index:idx_notes_user,priority:2" json:"createdAt"`
+	UpdatedAt   time.Time  `json:"updatedAt"`
 }
 
 // AnonymousUsage is the fraud backstop for the anonymous guest limit: each

@@ -14,6 +14,11 @@ services:
       SEARXNG_BASE_URL: http://searxng:8080
       CRAWLER_BASE_URL: http://crawler:3002
       UPLOADS_DIR: /uploads
+      # LibreTranslate is proxied server-side for the translator mini-app. The
+      # default assumes a "libretranslate" service on the external network; if
+      # the container has no DNS alias there, set LIBRETRANSLATE_BASE_URL to its
+      # IP (e.g. http://172.22.0.2:5000) in .env.production.
+      LIBRETRANSLATE_BASE_URL: "${LIBRETRANSLATE_BASE_URL:-http://libretranslate:5000}"
     volumes:
       # Uploaded logos/avatars persist across redeploys (the image pre-creates
       # /uploads owned by the nonroot user; the named volume inherits it).
@@ -27,13 +32,14 @@ services:
         condition: service_started
       crawler:
         condition: service_started
-    # PostgreSQL and Ollama are NOT deployed here — this service attaches to
-    # the existing shared DB network and the existing Ollama (Open WebUI)
-    # network, exactly like just-ip-service does.
+    # PostgreSQL, Ollama, and LibreTranslate are NOT deployed here — this
+    # service attaches to the existing shared DB network, the existing Ollama
+    # (Open WebUI) network, and the existing LibreTranslate network.
     networks:
       - default
       - shared_db
       - ollama
+      - libretranslate
 
   frontend:
     build:
@@ -76,6 +82,9 @@ networks:
   ollama:
     external: true
     name: "${OLLAMA_NETWORK:-open-webui_default}"
+  libretranslate:
+    external: true
+    name: "${LIBRETRANSLATE_NETWORK:-multi-ai-tools_app}"
 
 volumes:
   redis_data:

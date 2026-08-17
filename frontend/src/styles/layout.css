@@ -1,5 +1,12 @@
-.page-shell { min-height: 100dvh; padding: 0 clamp(20px, 4vw, 64px); }
-.header-bar { width: 100%; }
+/* The app frame pins the site footer to the bottom of short pages: the page
+   shell fills the remaining viewport height and the footer flows after it. */
+.app-frame { display: flex; flex-direction: column; min-height: 100dvh; }
+.app-main { display: flex; flex-direction: column; flex: 1 0 auto; }
+.page-shell { flex: 1 0 auto; min-height: 0; padding: 0 clamp(20px, 4vw, 64px); }
+/* Full-bleed sticky bar: the negative side margins (equal to the page shell's
+   padding) stretch the bar across the viewport. width stays auto — combining
+   it with width: 100% would over-constrain the block box and leave a gap on
+   the right side (and collapse percentage widths of grid children). */
 .header-bar--sticky {
   position: sticky;
   top: 0;
@@ -22,5 +29,19 @@
 .account-content { width: min(920px, 100%); margin: 64px auto 100px; }
 .persistent-ask { position: sticky; bottom: 0; z-index: 5; padding: 16px 0 20px; border-top: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent); background: color-mix(in srgb, var(--color-bg) 92%, transparent); backdrop-filter: blur(16px); }
 .persistent-ask > div { width: min(780px, 100%); margin: auto; }
-@media (max-width: 850px) { .app-header { grid-template-columns: 1fr auto; } .app-header--compact .header-center { grid-column: 1 / -1; grid-row: 2; } .app-header--compact { padding-bottom: 14px; } .result-content { margin-top: 48px; } }
-@media (max-width: 520px) { .page-shell { padding-inline: 20px; } .app-header { min-height: 72px; gap: 14px; } .account-content { margin-top: 42px; } }
+@media (max-width: 850px) {
+  /* All three columns must be explicit: .header-actions lives in column 3, so a
+     two-column grid pushes it into an implicit track that grid-column: 1 / -1
+     does not cover, collapsing the compact header-center to its content width. */
+  .app-header { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .app-header--compact .header-center { grid-column: 1 / -1; grid-row: 2; }
+  .app-header--compact { padding-bottom: 14px; }
+  .result-content { margin-top: 48px; }
+}
+@media (max-width: 520px) {
+  .page-shell { padding-inline: 20px; }
+  .app-header { min-height: 72px; gap: 14px; }
+  .header-actions { gap: 8px; }
+  .admin-entry { min-height: 34px; padding: 0 10px; font-size: .7rem; }
+  .account-content { margin-top: 42px; }
+}

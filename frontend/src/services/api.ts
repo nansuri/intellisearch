@@ -19,6 +19,13 @@ export const FRIENDLY_ERRORS: Record<string, string> = {
   USER02002: 'The image must be a JPG, PNG, GIF, or WebP under 2 MB.',
   USER03001: 'Your search history could not be loaded.',
   USER03002: 'Your search history could not be cleared.',
+  NOTE01001: 'Your notes could not be loaded.',
+  NOTE01002: 'That note could not be saved.',
+  NOTE01003: 'That note no longer exists.',
+  NOTE01004: 'That note could not be deleted.',
+  TRAN01001: 'The translator is temporarily unavailable — please try again.',
+  TRAN01002: 'Enter text to translate and choose a target language.',
+  TRAN01003: "You're translating too quickly — slow down and try again.",
   ADMN03002: 'That provider configuration is not valid.',
   ADMN04001: 'That queue configuration is not valid.',
   ADMN05001: 'That site configuration is not valid.',
@@ -50,7 +57,7 @@ export async function upload<T>(path: string, field: string, file: File): Promis
   return body.data
 }
 
-export type SiteSettings = { siteName: string; logoUrl: string | null; faviconUrl: string | null; tagline: string | null; googleSsoEnabled?: boolean }
+export type SiteSettings = { siteName: string; logoUrl: string | null; faviconUrl: string | null; tagline: string | null; copyright: string | null; googleSsoEnabled?: boolean }
 export type Source = { position: number; title: string; url: string; domain: string; snippet: string }
 export type ImageItem = { position: number; title: string; url: string; thumbnailUrl: string; source?: string; width?: number; height?: number }
 
@@ -85,6 +92,9 @@ export type UsersPage = { users: User[]; total: number; page: number; pageSize: 
 export type ProviderType = 'ollama' | 'openai_compatible' | 'pollinations' | 'huggingface'
 export type Provider = { id: string; name: string; providerType: ProviderType; baseUrl: string; model: string; parameters: Record<string, unknown> | null; isActive: boolean }
 export type HistoryItem = { id: number; query: string; createdAt: string; sessionId?: string; summary?: string }
+export type Note = { id: number; userId: string; title: string; content: string; sourceQuery?: string; sessionId?: string; createdAt: string; updatedAt: string }
+export type TranslateLanguage = { code: string; name: string }
+export type TranslateResult = { translatedText: string }
 export type QueueConfig = { maxConcurrent: number; maxQueueSize: number; requestTimeoutMs: number; perUserRateLimit: number; suggestionCacheHours: number; defaultDailyQuota: number; maxImageResults: number }
 export type OllamaModel = { name: string; size: number; parameterSize?: string; quantization?: string }
 export type OllamaRunningModel = { name: string; size: number; sizeVram: number; cpu?: string; gpu?: string; memory?: string }
@@ -130,6 +140,16 @@ export const getHistory = (limit = 20) => request<{ items: HistoryItem[] }>(`/me
 export const getHistorySuggestions = (refresh = false) => request<{ suggestions: string[] }>(`/me/history/suggestions${refresh ? '?refresh=1' : ''}`)
 export const clearHistory = () => request<{ cleared: boolean }>('/me/history', { method: 'DELETE' })
 
+// Mini apps — notes
+export const listNotes = () => request<{ items: Note[] }>('/me/notes')
+export const createNote = (input: { title: string; content: string; sourceQuery?: string; sessionId?: string }) => request<Note>('/me/notes', { method: 'POST', body: JSON.stringify(input) })
+export const updateNote = (id: number, input: { title: string; content: string }) => request<Note>(`/me/notes/${id}`, { method: 'PATCH', body: JSON.stringify(input) })
+export const deleteNote = (id: number) => request<{ deleted: boolean }>(`/me/notes/${id}`, { method: 'DELETE' })
+
+// Mini apps — translator (proxied server-side to LibreTranslate)
+export const getTranslateLanguages = () => request<{ languages: TranslateLanguage[] }>('/translate/languages')
+export const translate = (input: { q: string; source: string; target: string; format?: string }) => request<TranslateResult>('/translate', { method: 'POST', body: JSON.stringify(input) })
+
 // Admin — users
 export const listUsers = (q: string, page: number, pageSize = 20) => request<UsersPage>(`/admin/users?q=${encodeURIComponent(q)}&page=${page}&page_size=${pageSize}`)
 export const createUser = (input: { name: string; email: string; password: string; role: string; aiDailyQuota: number }) => request<User>('/admin/users', { method: 'POST', body: JSON.stringify(input) })
@@ -156,7 +176,7 @@ export const getOllamaHealth = (baseUrl: string) => request<OllamaHealth>(`/admi
 
 // Admin — branding
 export const getSiteSettings = () => request<SiteSettings>('/admin/site-settings')
-export const updateSiteSettings = (input: { siteName: string; tagline: string | null }) => request<SiteSettings>('/admin/site-settings', { method: 'PATCH', body: JSON.stringify(input) })
+export const updateSiteSettings = (input: { siteName: string; tagline: string | null; copyright: string | null }) => request<SiteSettings>('/admin/site-settings', { method: 'PATCH', body: JSON.stringify(input) })
 export const uploadLogo = (file: File) => upload<{ logoUrl: string }>('/admin/site-settings/logo', 'logo', file)
 export const deleteLogo = () => request<{ logoUrl: null }>('/admin/site-settings/logo', { method: 'DELETE' })
 export const uploadFavicon = (file: File) => upload<{ faviconUrl: string }>('/admin/site-settings/favicon', 'favicon', file)

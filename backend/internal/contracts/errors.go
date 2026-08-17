@@ -105,3 +105,24 @@ const ADMN05003 = "ADMN05003"
 
 // ADMN06001 indicates the Ollama server could not be reached or the base URL is invalid.
 const ADMN06001 = "ADMN06001"
+
+// NOTE01001 indicates the user's notes could not be loaded.
+const NOTE01001 = "NOTE01001"
+
+// NOTE01002 indicates a note could not be saved.
+const NOTE01002 = "NOTE01002"
+
+// NOTE01003 indicates a requested note was not found.
+const NOTE01003 = "NOTE01003"
+
+// NOTE01004 indicates a note could not be deleted.
+const NOTE01004 = "NOTE01004"
+
+// TRAN01001 indicates the translation service is unavailable.
+const TRAN01001 = "TRAN01001"
+
+// TRAN01002 indicates an invalid translation request.
+const TRAN01002 = "TRAN01002"
+
+// TRAN01003 indicates the translation rate limit was exceeded.
+const TRAN01003 = "TRAN01003"

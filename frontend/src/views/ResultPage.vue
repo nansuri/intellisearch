@@ -10,7 +10,9 @@ import FollowUpBlock, { type FollowUpEntry } from '../components/FollowUpBlock.v
 import ImageGrid from '../components/ImageGrid.vue'
 import WebResultList from '../components/WebResultList.vue'
 import { useSiteStore } from '../stores/site'
-import { ask, askUrl, getSession, ApiError, type AskMode, type ImageItem, type Source } from '../services/api'
+import { ask, askUrl, createNote, getSession, ApiError, type AskMode, type ImageItem, type Source } from '../services/api'
+import { useAuthStore } from '../stores/auth'
+import { useToastStore } from '../stores/toast'
 import { clearSearchSession } from '../composables/useSearchSession'
 import { settleAskGhost } from '../services/motion'
 import { resolveLocationForQuery } from '../composables/useDeviceLocation'
@@ -21,6 +23,9 @@ import { mapChatSession } from '../utils/mapChatSession'
 const route = useRoute()
 const router = useRouter()
 const site = useSiteStore()
+const auth = useAuthStore()
+const toast = useToastStore()
+const savingNote = ref(false)
 onMounted(() => site.load())
 
 const query = computed(() => String(route.query.q || '').trim())
@@ -312,6 +317,26 @@ function setFollowUpCollapsed(id: number, collapsed: boolean) {
   }
 }
 
+// Mini-apps integration: save the current answer/summary as a note, linked
+// back to the search it came from.
+async function saveToNotes() {
+  if (savingNote.value || !answer.value || !auth.isAuthed) return
+  savingNote.value = true
+  try {
+    await createNote({
+      title: query.value,
+      content: answer.value,
+      sourceQuery: query.value,
+      ...(sessionId.value ? { sessionId: sessionId.value } : {}),
+    })
+    toast.success('Saved to your notes.')
+  } catch (e) {
+    toast.error((e as Error).message)
+  } finally {
+    savingNote.value = false
+  }
+}
+
 onMounted(bootstrap)
 onMounted(settleAskGhost)
 onBeforeUnmount(persistState)
@@ -352,6 +377,15 @@ watch(
           <span>·</span>
           <span class="result-location-tag">Using your location</span>
         </template>
+        <button
+          v-if="auth.isAuthed && answer && !loading && !restoring"
+          type="button"
+          class="save-note-btn"
+          :disabled="savingNote"
+          @click="saveToNotes"
+        >
+          {{ savingNote ? 'Saving…' : 'Save summary to notes' }}
+        </button>
       </div>
       <p v-if="locationMissing" class="location-note">Location wasn't shared, so nearby results may be less accurate. Allow location access in your browser for better local answers.</p>
       <h1 class="result-query">{{ query || 'Your question' }}</h1>
@@ -499,6 +533,20 @@ watch(
 }
 .guest-limit-copy { line-height: 1.5; }
 @media (max-width: 520px) { .guest-limit-banner { align-items: flex-start; flex-direction: column; } }
+.save-note-btn {
+  margin-left: auto;
+  padding: 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  color: var(--color-primary);
+  font-size: .72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color .16s ease, background .16s ease;
+}
+.save-note-btn:hover:not(:disabled) { border-color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface)); }
+.save-note-btn:disabled { opacity: .55; cursor: not-allowed; }
 .result-kind {
   display: inline-flex;
   align-items: center;

@@ -97,9 +97,10 @@
 | site_name | varchar | shown as logo/title on the main page; generic default shipped in code |
 | logo_url | varchar | nullable; uploaded logo or default |
 | tagline | varchar | nullable; optional short description |
+| copyright | varchar | nullable; the footer's legal line — rendered as `© <year> <copyright>` (falls back to the site name when unset) |
 | updated_at | timestamptz | |
 
-> Branding must not be hardcoded. The code ships a generic default (`site_settings`), which the Super Owner overrides from the Owner Control Panel; the public main page always renders from `site_settings`.
+> Branding must not be hardcoded. The code ships a generic default (`site_settings`), which the Super Owner overrides from the Owner Control Panel; the public main page always renders from `site_settings`. Uploaded logo/favicon/avatar files use **unique filenames** (`<id>-<nonce>.<ext>`), so re-uploads produce fresh URLs (browser-cache safe) and replaced files are deleted best-effort — the old fixed name (`logo.png`) kept the same URL and served a stale cached image.
 
 ### search_history
 | Field | Type | Notes |
@@ -127,6 +128,19 @@
 | created_at | timestamptz | |
 
 > `usage_logs` powers the AI statistics panel (success/failure rate, error list, latency percentiles). **Privacy:** the control panel never receives verbatim queries — `topQueries` are masked (first rune + `*`s) and the trending-words view aggregates lowercase terms per time bucket (stopwords dropped), so admins see *what* is trending without any user's exact query.
+
+### notes
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | bigserial (PK) | |
+| user_id | UUID (FK → users) | indexed with created_at |
+| title | varchar | note title (max 120 chars client-side) |
+| content | text | note body, capped at 50k runes server-side |
+| source_query | text | nullable; the search query the note was saved from ("Save summary to notes") |
+| session_id | UUID (FK → chat_sessions) | nullable; the chat thread the note came from |
+| created_at / updated_at | timestamptz | |
+
+> Backs the **Notes mini-app** (top-right app drawer → `/notes`). Personal per-user data: every read/write is scoped to the owning user, and cross-user access is a 404 (`NOTE01003`). The result page's "Save summary to notes" creates a note with `title = query`, `content = answer`, and the source link.
 
 ### anonymous_usage
 | Field | Type | Notes |

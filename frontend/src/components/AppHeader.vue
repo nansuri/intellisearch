@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import ThemeToggle from './ThemeToggle.vue'
 import AccountMenu from './AccountMenu.vue'
+import AppDrawer from './AppDrawer.vue'
 import { useSiteStore } from '../stores/site'
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
@@ -27,6 +28,7 @@ function adminGo() { router.push('/admin/users') }
       <nav class="header-actions" aria-label="Account actions">
         <ThemeToggle />
         <button v-if="auth.isSuperOwner" class="admin-entry" @click="adminGo">Control panel</button>
+        <AppDrawer v-if="auth.isAuthed" />
         <AccountMenu />
       </nav>
     </header>

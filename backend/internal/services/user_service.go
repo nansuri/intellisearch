@@ -1,9 +1,9 @@
 package services
 
 import (
+	"errors"
 	"intellisearch/internal/models/entities"
 	"intellisearch/internal/repositories"
-	"errors"
 	"strings"
 	"time"
 
@@ -17,8 +17,8 @@ var (
 )
 
 type UserService struct {
-	repo   *repositories.UserRepository
-	usage  *repositories.UsageLogRepository
+	repo    *repositories.UserRepository
+	usage   *repositories.UsageLogRepository
 	uploads string
 }
 
@@ -54,6 +54,7 @@ func (s *UserService) Usage(userID uuid.UUID) (used int64, quota int, err error)
 }
 
 // Avatar validates and stores an uploaded avatar image, then updates the user.
+// The previous avatar file is removed so re-uploads don't accumulate.
 func (s *UserService) Avatar(userID uuid.UUID, filename string, data []byte) (string, error) {
 	url, err := saveUpload(s.uploads, "avatars", userID.String(), filename, data, 2<<20)
 	if err != nil {
@@ -62,6 +63,9 @@ func (s *UserService) Avatar(userID uuid.UUID, filename string, data []byte) (st
 	user, err := s.repo.ByID(userID)
 	if err != nil {
 		return "", err
+	}
+	if user.AvatarURL != nil {
+		removeStoredUpload(s.uploads, *user.AvatarURL)
 	}
 	user.AvatarURL = &url
 	return url, s.repo.Save(&user)

@@ -61,8 +61,11 @@ func main() {
 	adminHandler := handlers.NewAdminHandler(userService, adminService, statsService, services.NewOllamaService())
 	sessionHandler := handlers.NewSessionHandler(sessionRepository, messageRepository, authService)
 	historyService := services.NewSearchHistoryService(searchHistoryRepository, messageRepository, llmService, queueConfigRepository)
+	noteService := services.NewNoteService(repositories.NewNoteRepository(db))
+	translateService := services.NewTranslateService(cfg.LibreTranslateBaseURL)
+	appsHandler := handlers.NewAppsHandler(noteService, translateService, limiter)
 
-	api := router.New(cfg.CORSOrigins, cfg.UploadsDir, siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService, historyService), sessionHandler, aiHandler, adminHandler, authService)
+	api := router.New(cfg.CORSOrigins, cfg.UploadsDir, siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService, historyService), sessionHandler, aiHandler, adminHandler, appsHandler, authService)
 	// Only the configured proxies may supply X-Forwarded-For; everything else is
 	// ignored so clients cannot spoof the client IP used for the anonymous
 	// per-IP AI allowance and rate limiting.

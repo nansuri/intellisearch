@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -42,7 +43,7 @@ func adminTestMux(t *testing.T) (*httptest.Server, *gorm.DB) {
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&entities.User{}, &entities.SiteSettings{}, &entities.AIQueueConfig{}, &entities.AIProvider{}, &entities.ChatSession{}, &entities.Message{}, &entities.SearchResult{}, &entities.ImageResult{}, &entities.UsageLog{}, &entities.CrawlJob{}, &entities.SearchHistory{}, &entities.AnonymousUsage{}); err != nil {
+	if err := db.AutoMigrate(&entities.User{}, &entities.SiteSettings{}, &entities.AIQueueConfig{}, &entities.AIProvider{}, &entities.ChatSession{}, &entities.Message{}, &entities.SearchResult{}, &entities.ImageResult{}, &entities.UsageLog{}, &entities.CrawlJob{}, &entities.SearchHistory{}, &entities.AnonymousUsage{}, &entities.Note{}); err != nil {
 		t.Fatal(err)
 	}
 	seed := func(user *entities.User, password string) {
@@ -73,8 +74,9 @@ func adminTestMux(t *testing.T) (*httptest.Server, *gorm.DB) {
 	aiHandler := handlers.NewAIHandler(fakeRunner{}, repositories.NewQueueConfigRepository(db), repositories.NewUserRepository(db), repositories.NewUsageLogRepository(db), repositories.NewAnonymousUsageRepository(db), allowingLimiter{}, authService)
 	t.Cleanup(aiHandler.Stop)
 	adminHandler := handlers.NewAdminHandler(userService, adminService, statsService, services.NewOllamaService())
+	appsHandler := handlers.NewAppsHandler(services.NewNoteService(repositories.NewNoteRepository(db)), services.NewTranslateService(""), allowingLimiter{})
 	siteService := services.NewSiteService(repositories.NewSiteRepository(db))
-	mux := New("*", t.TempDir(), siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService, historyService), nil, aiHandler, adminHandler, authService)
+	mux := New("*", t.TempDir(), siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService, historyService), nil, aiHandler, adminHandler, appsHandler, authService)
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 	return server, db
@@ -565,6 +567,84 @@ func TestAdminOllamaEndpoints(t *testing.T) {
 	status, payload = call(t, server, http.MethodGet, "/api/v1/admin/ai/ollama/models?baseUrl=ftp%3A%2F%2Fnope", ownerToken, nil)
 	if status != http.StatusBadRequest || !bytes.Contains(payload, []byte(`"errorCode":"ADMN06001"`)) {
 		t.Fatalf("invalid ollama url: expected 400 ADMN06001, got %d %s", status, payload)
+	}
+}
+
+func TestNotesEndpoints(t *testing.T) {
+	server, db := adminTestMux(t)
+	token := loginToken(t, server, "jane@example.com", "jane-pass")
+	anon := loginToken(t, server, "owner@example.com", "owner-pass") // different user for isolation checks
+
+	// Anonymous is rejected (401) on every notes route.
+	for _, method := range []string{http.MethodGet, http.MethodPost} {
+		status, _ := call(t, server, method, "/api/v1/me/notes", "", nil)
+		if status != http.StatusUnauthorized {
+			t.Fatalf("expected 401 for anonymous %s /me/notes, got %d", method, status)
+		}
+	}
+
+	// Create a note (with a source link), then list it.
+	status, payload := call(t, server, http.MethodPost, "/api/v1/me/notes", token, []byte(`{"title":"Tokyo","content":"Ichiran is best.","sourceQuery":"best ramen tokyo"}`))
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"title":"Tokyo"`)) {
+		t.Fatalf("create note failed: %d %s", status, payload)
+	}
+	var created struct {
+		Data struct {
+			ID uint64 `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(payload, &created); err != nil || created.Data.ID == 0 {
+		t.Fatal("note missing id", payload)
+	}
+
+	status, payload = call(t, server, http.MethodGet, "/api/v1/me/notes", token, nil)
+	if status != http.StatusOK || !bytes.Contains(payload, []byte("Ichiran")) {
+		t.Fatalf("list notes failed: %d %s", status, payload)
+	}
+
+	// Another user cannot update or delete jane's note.
+	status, _ = call(t, server, http.MethodPatch, "/api/v1/me/notes/"+strconv.FormatUint(created.Data.ID, 10), anon, []byte(`{"title":"hijack","content":"nope"}`))
+	if status != http.StatusNotFound {
+		t.Fatalf("expected 404 for cross-user update, got %d", status)
+	}
+	status, _ = call(t, server, http.MethodDelete, "/api/v1/me/notes/"+strconv.FormatUint(created.Data.ID, 10), anon, nil)
+	if status != http.StatusNotFound {
+		t.Fatalf("expected 404 for cross-user delete, got %d", status)
+	}
+
+	// Jane edits and then deletes her own note.
+	status, payload = call(t, server, http.MethodPatch, "/api/v1/me/notes/"+strconv.FormatUint(created.Data.ID, 10), token, []byte(`{"title":"Tokyo v2","content":"Updated."}`))
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"title":"Tokyo v2"`)) {
+		t.Fatalf("update note failed: %d %s", status, payload)
+	}
+	status, payload = call(t, server, http.MethodDelete, "/api/v1/me/notes/"+strconv.FormatUint(created.Data.ID, 10), token, nil)
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"deleted":true`)) {
+		t.Fatalf("delete note failed: %d %s", status, payload)
+	}
+	var count int64
+	if err := db.Model(&entities.Note{}).Count(&count).Error; err != nil || count != 0 {
+		t.Fatalf("expected no notes left, got %d (err=%v)", count, err)
+	}
+}
+
+func TestTranslateEndpoints(t *testing.T) {
+	server, _ := adminTestMux(t)
+	janeToken := loginToken(t, server, "jane@example.com", "jane-pass")
+
+	// The test mux builds the apps handler with an empty LibreTranslate base
+	// URL, so the endpoints answer 503 TRAN01001 (not configured).
+	status, payload := call(t, server, http.MethodGet, "/api/v1/translate/languages", janeToken, nil)
+	if status != http.StatusServiceUnavailable || !bytes.Contains(payload, []byte(`"errorCode":"TRAN01001"`)) {
+		t.Fatalf("expected 503 TRAN01001 for unconfigured translator, got %d %s", status, payload)
+	}
+	status, payload = call(t, server, http.MethodPost, "/api/v1/translate", janeToken, []byte(`{"q":"hello","source":"auto","target":"ja"}`))
+	if status != http.StatusServiceUnavailable || !bytes.Contains(payload, []byte(`"errorCode":"TRAN01001"`)) {
+		t.Fatalf("expected 503 TRAN01001 for unconfigured translate, got %d %s", status, payload)
+	}
+	// Anonymous is rejected before the service check (401).
+	status, _ = call(t, server, http.MethodPost, "/api/v1/translate", "", []byte(`{"q":"hello","target":"ja"}`))
+	if status != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for anonymous translate, got %d", status)
 	}
 }
 

@@ -22,6 +22,7 @@ type Config struct {
 	UploadsDir                                                                string
 	GoogleClientID, GoogleClientSecret, GoogleRedirectURL, FrontendOrigin      string
 	TrustedProxies                                                            []string
+	LibreTranslateBaseURL                                                     string
 }
 
 func Load() Config {
@@ -43,7 +44,10 @@ func Load() Config {
 		CrawlerBaseURL: env("CRAWLER_BASE_URL", "http://localhost:3002"), CrawlerTimeoutMS: envInt("CRAWLER_TIMEOUT_MS", 15000),
 		CrawlTopN: envInt("CRAWL_TOP_N", 3),
 		UploadsDir: env("UPLOADS_DIR", "./uploads"),
-		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+		// LibreTranslate is an internal-only container (attached via the
+		// production compose network); the API proxies it for the translator app.
+		LibreTranslateBaseURL: env("LIBRETRANSLATE_BASE_URL", "http://libretranslate:5000"),
+		GoogleClientID:        os.Getenv("GOOGLE_CLIENT_ID"),
 		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		GoogleRedirectURL:  env("GOOGLE_REDIRECT_URL", "http://localhost:5173/api/v1/auth/google/callback"),
 		FrontendOrigin:     env("FRONTEND_ORIGIN", "http://localhost:5173"),

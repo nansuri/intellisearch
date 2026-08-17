@@ -1,13 +1,11 @@
 package services
 
 import (
-	"intellisearch/internal/models/entities"
-	"intellisearch/internal/repositories"
 	"encoding/json"
 	"errors"
+	"intellisearch/internal/models/entities"
+	"intellisearch/internal/repositories"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,9 +13,9 @@ import (
 )
 
 var (
-	ErrProviderInvalid   = errors.New("invalid provider configuration")
-	ErrProviderNotFound  = errors.New("provider not found")
-	ErrQueueConfigInvalid = errors.New("invalid queue configuration")
+	ErrProviderInvalid     = errors.New("invalid provider configuration")
+	ErrProviderNotFound    = errors.New("provider not found")
+	ErrQueueConfigInvalid  = errors.New("invalid queue configuration")
 	ErrSiteSettingsInvalid = errors.New("invalid site settings")
 )
 
@@ -162,8 +160,8 @@ func (s *AdminService) UpdateQueueConfig(maxConcurrent, maxQueueSize, requestTim
 // SiteSettings returns the persisted branding row.
 func (s *AdminService) SiteSettings() (entities.SiteSettings, error) { return s.site.Get() }
 
-// UpdateSiteSettings saves the site name and tagline.
-func (s *AdminService) UpdateSiteSettings(name string, tagline *string) (entities.SiteSettings, error) {
+// UpdateSiteSettings saves the site name, tagline, and footer copyright line.
+func (s *AdminService) UpdateSiteSettings(name string, tagline *string, copyright *string) (entities.SiteSettings, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || len(name) > 60 {
 		return entities.SiteSettings{}, ErrSiteSettingsInvalid
@@ -174,6 +172,7 @@ func (s *AdminService) UpdateSiteSettings(name string, tagline *string) (entitie
 	}
 	settings.SiteName = name
 	settings.Tagline = tagline
+	settings.Copyright = copyright
 	settings.UpdatedAt = time.Now().UTC()
 	if err := s.site.Update(settings); err != nil {
 		return settings, err
@@ -181,7 +180,8 @@ func (s *AdminService) UpdateSiteSettings(name string, tagline *string) (entitie
 	return settings, nil
 }
 
-// Logo replaces the site logo image and returns the public URL.
+// Logo replaces the site logo image and returns the public URL. The previous
+// logo file is removed so re-uploads don't accumulate on disk.
 func (s *AdminService) Logo(filename string, data []byte) (string, error) {
 	url, err := saveUpload(s.uploads, "branding", "logo", filename, data, 2<<20)
 	if err != nil {
@@ -193,6 +193,9 @@ func (s *AdminService) Logo(filename string, data []byte) (string, error) {
 	settings, err := s.site.Get()
 	if err != nil {
 		return "", err
+	}
+	if settings.LogoURL != nil {
+		removeStoredUpload(s.uploads, *settings.LogoURL)
 	}
 	settings.LogoURL = &url
 	settings.UpdatedAt = time.Now().UTC()
@@ -209,16 +212,16 @@ func (s *AdminService) RemoveLogo() error {
 	if err != nil {
 		return err
 	}
-	if settings.LogoURL != nil && s.uploads != "" {
-		path := filepath.Join(s.uploads, filepath.Base(strings.TrimPrefix(*settings.LogoURL, "/uploads/")))
-		_ = os.Remove(path)
+	if settings.LogoURL != nil {
+		removeStoredUpload(s.uploads, *settings.LogoURL)
 	}
 	settings.LogoURL = nil
 	settings.UpdatedAt = time.Now().UTC()
 	return s.site.Update(settings)
 }
 
-// Favicon replaces the site favicon image and returns the public URL.
+// Favicon replaces the site favicon image and returns the public URL. The
+// previous favicon file is removed best-effort.
 func (s *AdminService) Favicon(filename string, data []byte) (string, error) {
 	url, err := saveUpload(s.uploads, "branding", "favicon", filename, data, 2<<20)
 	if err != nil {
@@ -230,6 +233,9 @@ func (s *AdminService) Favicon(filename string, data []byte) (string, error) {
 	settings, err := s.site.Get()
 	if err != nil {
 		return "", err
+	}
+	if settings.FaviconURL != nil {
+		removeStoredUpload(s.uploads, *settings.FaviconURL)
 	}
 	settings.FaviconURL = &url
 	settings.UpdatedAt = time.Now().UTC()
@@ -246,9 +252,8 @@ func (s *AdminService) RemoveFavicon() error {
 	if err != nil {
 		return err
 	}
-	if settings.FaviconURL != nil && s.uploads != "" {
-		path := filepath.Join(s.uploads, filepath.Base(strings.TrimPrefix(*settings.FaviconURL, "/uploads/")))
-		_ = os.Remove(path)
+	if settings.FaviconURL != nil {
+		removeStoredUpload(s.uploads, *settings.FaviconURL)
 	}
 	settings.FaviconURL = nil
 	settings.UpdatedAt = time.Now().UTC()

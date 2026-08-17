@@ -11,7 +11,7 @@ import ConfirmModal from '../../components/ConfirmModal.vue'
 const toast = useToastStore()
 const site = useSiteStore()
 const loading = ref(true); const saving = ref(false)
-const name = ref(''); const tagline = ref('')
+const name = ref(''); const tagline = ref(''); const copyright = ref('')
 const faviconUrl = ref<string | null>(null)
 const faviconInput = ref<HTMLInputElement | null>(null)
 const faviconSaving = ref(false); const faviconDragging = ref(false)
@@ -21,14 +21,14 @@ async function load() {
   loading.value = true
   try {
     const s = await getSiteSettings()
-    name.value = s.siteName; tagline.value = s.tagline || ''; faviconUrl.value = s.faviconUrl
+    name.value = s.siteName; tagline.value = s.tagline || ''; copyright.value = s.copyright || ''; faviconUrl.value = s.faviconUrl
   } catch (e) { toast.error((e as Error).message) } finally { loading.value = false }
 }
 async function save() {
   if (!name.value.trim()) return
   saving.value = true
   try {
-    const updated = await updateSiteSettings({ siteName: name.value.trim(), tagline: tagline.value.trim() || null })
+    const updated = await updateSiteSettings({ siteName: name.value.trim(), tagline: tagline.value.trim() || null, copyright: copyright.value.trim() || null })
     site.settings = updated
     toast.success('Identity updated — the public page updates immediately.')
   } catch (e) { toast.error((e as Error).message) } finally { saving.value = false }
@@ -71,6 +71,9 @@ onMounted(load)
       </FormField>
       <FormField label="Tagline" hint="One short line under the name">
         <input v-model="tagline" class="text-input" placeholder="Research, answered." />
+      </FormField>
+      <FormField label="Copyright" hint="The legal line in the site footer — leave blank to use the site name. Rendered as © year + text.">
+        <input v-model="copyright" class="text-input" maxlength="80" placeholder="Acme Search" />
       </FormField>
       <div class="modal-submit-row">
         <button class="base-button button-primary" :disabled="saving || !name.trim()" @click="save">{{ saving ? 'Saving…' : 'Save identity' }}</button>
