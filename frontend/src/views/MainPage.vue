@@ -9,12 +9,14 @@ import { getHistory, getHistorySuggestions } from '../services/api'
 import { createAskGhost } from '../services/motion'
 import { resolveLocationForQuery } from '../composables/useDeviceLocation'
 import { needsLocationContext } from '../utils/locationIntent'
+import type { AskMode } from '../services/api'
 
 const router = useRouter()
 const site = useSiteStore(); onMounted(() => site.load())
 const auth = useAuthStore()
 const askBox = ref<InstanceType<typeof AskBox> | null>(null)
 const locating = ref(false)
+const mode = ref<AskMode>('enhanced')
 
 // Recent searches + AI suggestions (signed-in users only).
 const recent = ref<string[]>([])
@@ -69,7 +71,7 @@ async function loadSuggestions(force = false) {
   }
 }
 
-async function onAsk(question: string) {
+async function onAsk(question: string, askMode: AskMode = 'enhanced') {
   const el = askBox.value?.$el
   if (el instanceof HTMLElement) {
     createAskGhost(el.getBoundingClientRect(), question)
@@ -80,7 +82,7 @@ async function onAsk(question: string) {
   } finally {
     locating.value = false
   }
-  router.push({ path: '/search', query: { q: question } })
+  router.push({ path: '/search', query: { q: question, mode: askMode } })
 }
 
 onMounted(() => {
@@ -97,7 +99,7 @@ onMounted(() => {
     <AppHeader />
     <section class="hero">
       <div class="hero-brand"><h1>{{ site.settings?.siteName || 'Intellisearch' }}</h1></div>
-      <AskBox ref="askBox" :show-prompt="false" :helper-text="locating ? 'Getting your location for nearby results…' : ''" @submit="onAsk" />
+      <AskBox ref="askBox" :show-prompt="false" mode-toggle :mode="mode" :helper-text="locating ? 'Getting your location for nearby results…' : ''" @update:mode="mode = $event" @submit="onAsk" />
       <section v-if="signedIn && (historyLoading || recent.length || suggestions.length || suggestionsLoading)" class="history-panel" aria-label="Search history and suggestions">
         <div v-if="recent.length" class="history-group">
           <span class="history-label">Recent searches</span>

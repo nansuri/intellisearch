@@ -152,9 +152,10 @@ func (h *AIHandler) QueueMetrics() services.QueueHealth {
 
 func (h *AIHandler) Ask(c *gin.Context) {
 	var request struct {
-		Query     string              `json:"query"`
-		SessionID *uuid.UUID          `json:"sessionId"`
+		Query     string                `json:"query"`
+		SessionID *uuid.UUID            `json:"sessionId"`
 		Location  *services.GeoLocation `json:"location"`
+		Mode      string                `json:"mode"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
 		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.AISY01004, "Ask a question first."))
@@ -171,8 +172,14 @@ func (h *AIHandler) Ask(c *gin.Context) {
 	} else if request.Location != nil {
 		logrus.WithFields(logrus.Fields{"latitude": request.Location.Latitude, "longitude": request.Location.Longitude}).Warn("invalid device location ignored")
 	}
+	// Ask modes: "search" returns raw web results (no LLM), everything else
+	// falls back to the full "enhanced" pipeline for backward compatibility.
+	mode := services.ModeEnhanced
+	if request.Mode == services.ModeSearch {
+		mode = services.ModeSearch
+	}
 	config, _ := h.currentConfig()
-	result, err := h.enqueue(c.Request.Context(), services.AskInput{Query: request.Query, SessionID: request.SessionID, UserID: userID, IP: c.ClientIP(), Location: location}, config.PerUserRateLimit, time.Minute)
+	result, err := h.enqueue(c.Request.Context(), services.AskInput{Query: request.Query, SessionID: request.SessionID, UserID: userID, IP: c.ClientIP(), Location: location, Mode: mode}, config.PerUserRateLimit, time.Minute)
 	h.respond(c, result, err)
 }
 

@@ -26,6 +26,13 @@ var (
 const maxQueryLength = 2000
 const maxPageTextLength = 8000
 
+// Ask modes: enhanced runs the full pipeline (SearXNG + crawler + LLM
+// synthesis); search returns raw web results without any AI work.
+const (
+	ModeEnhanced = "enhanced"
+	ModeSearch   = "search"
+)
+
 // AskInput describes one AI job submitted by the handler.
 type AskInput struct {
 	Query     string
@@ -34,6 +41,7 @@ type AskInput struct {
 	URL       string     // non-empty for URL-submission asks
 	IP        string     // fallback identity for anonymous rate limiting
 	Location  *GeoLocation
+	Mode      string     // ModeEnhanced (default) or ModeSearch
 }
 
 // AskResult is the envelope payload returned to the client.
@@ -131,10 +139,24 @@ func (s *AIService) Answer(ctx context.Context, input AskInput) (AskResult, erro
 	} else {
 		var searchQuery string
 		searchQuery, locationNote = BuildLocationContext(ctx, s.geo, query, input.Location)
-		sources, promptSources, err = s.collectFromSearch(ctx, searchQuery, assistantMessage.ID)
+		// Search-only mode skips the deep-read (no crawler work) — results are raw.
+		sources, promptSources, err = s.collectFromSearch(ctx, searchQuery, assistantMessage.ID, input.Mode != ModeSearch)
 	}
 	if err != nil {
 		return fail(err)
+	}
+
+	// "Ask" (search mode) stops here: no LLM synthesis, just the web results.
+	// The assistant message still exists (empty) so session history and source
+	// cards stay consistent, and the usage log records a completed non-AI ask.
+	if input.Mode == ModeSearch {
+		assistantMessage.Status = entities.MessageStatusCompleted
+		usageLog.LatencyMS = int(time.Since(started).Milliseconds())
+		usageLog.Status = entities.MessageStatusCompleted
+		_ = s.messages.Update(&assistantMessage)
+		_ = s.usageLogs.Update(&usageLog)
+		result.Sources = sources
+		return result, nil
 	}
 
 	system := "You are a research assistant. Answer the question concisely and accurately. Format your answer in Markdown so it renders well: use short headings, bullet lists, and bold highlights where they help readability, and use emoji sparingly to make key points stand out. When you use information from the provided sources, cite them inline as [1], [2], etc., matching the numbered source list. If a source includes a relevant image, you may embed it with markdown image syntax. If no sources are provided, answer from general knowledge and note that you could not find web sources."
@@ -217,16 +239,18 @@ func (s *AIService) conversationContext(session entities.ChatSession, currentUse
 	return chat
 }
 
-// collectFromSearch queries SearXNG, persists the source cards, and deep-reads
-// the top pages. Search failures degrade gracefully: the LLM still answers,
-// without web sources.
-func (s *AIService) collectFromSearch(ctx context.Context, query string, messageID uuid.UUID) ([]SourceItem, []string, error) {
+// collectFromSearch queries SearXNG, persists the source cards, and optionally
+// deep-reads the top pages (only for enhanced mode). Search failures degrade
+// gracefully: the LLM still answers, without web sources.
+func (s *AIService) collectFromSearch(ctx context.Context, query string, messageID uuid.UUID, deepRead bool) ([]SourceItem, []string, error) {
 	items, err := s.search.Search(ctx, query)
 	if err != nil {
 		return []SourceItem{}, nil, nil
 	}
-	if err := s.deepRead(ctx, items); err != nil {
-		return []SourceItem{}, nil, err
+	if deepRead {
+		if err := s.deepRead(ctx, items); err != nil {
+			return []SourceItem{}, nil, err
+		}
 	}
 	sources := make([]entities.SearchResult, 0, len(items))
 	promptSources := make([]string, 0, len(items))

@@ -16,7 +16,7 @@ export type FollowUpEntry = {
   highlighted: boolean
 }
 
-const props = defineProps<{ entry: FollowUpEntry; index: number; active: boolean }>()
+const props = withDefaults(defineProps<{ entry: FollowUpEntry; index: number; active: boolean; searchOnly?: boolean }>(), { searchOnly: false })
 const emit = defineEmits<{ 'update:collapsed': [value: boolean] }>()
 const root = ref<HTMLElement | null>(null)
 
@@ -61,11 +61,12 @@ defineExpose({ scrollToBlock })
 
     <CollapsibleAnswer
       v-else
-      label="AI overview"
+      :label="searchOnly ? 'Web results' : 'AI overview'"
       :answer="entry.answer"
       :sources="entry.sources"
       :collapsed="entry.collapsed"
       :highlighted="entry.highlighted"
+      :empty-label="searchOnly ? 'Raw web results — no AI summary.' : undefined"
       compact
       class="follow-up-answer"
       @update:collapsed="emit('update:collapsed', $event)"

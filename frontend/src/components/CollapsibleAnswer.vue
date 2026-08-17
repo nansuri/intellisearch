@@ -13,12 +13,14 @@ const props = withDefaults(defineProps<{
   highlighted?: boolean
   showSources?: boolean
   compact?: boolean
+  emptyLabel?: string
 }>(), {
   sources: () => [],
   collapsed: false,
   highlighted: false,
   showSources: true,
   compact: false,
+  emptyLabel: 'No answer yet. Try asking again.',
 })
 
 const emit = defineEmits<{ 'update:collapsed': [value: boolean] }>()
@@ -60,7 +62,7 @@ function collapse() { emit('update:collapsed', true) }
         <button v-if="canCollapse" type="button" class="collapse-toggle" @click="collapse">Collapse</button>
       </div>
       <MarkdownView v-if="answer" :content="answer" />
-      <p v-else>No answer yet. Try asking again.</p>
+      <p v-else>{{ emptyLabel }}</p>
 
       <section v-if="showSources && sources.length" class="sources sources--nested">
         <div class="sources-heading"><h2>Sources</h2><span>{{ sources.length }} results</span></div>

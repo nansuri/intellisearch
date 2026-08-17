@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/uuid"
@@ -16,10 +17,12 @@ import (
 )
 
 // newAITestEnv wires the full pipeline against httptest fakes for SearXNG, the
-// crawler, and the Ollama provider. searchDown makes SearXNG return 500s.
-func newAITestEnv(t *testing.T, searchDown bool) (*AIService, *gorm.DB) {
+// crawler, and the Ollama provider. searchDown makes SearXNG return 500s. The
+// returned counter tracks crawler hits so tests can assert deep-read behavior.
+func newAITestEnv(t *testing.T, searchDown bool) (*AIService, *gorm.DB, *int64) {
 	t.Helper()
 	db := newTestDB(t)
+	var crawlHits int64
 	providerRepo := repositories.NewProviderRepository(db)
 	ollamaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/chat" {
@@ -37,6 +40,7 @@ func newAITestEnv(t *testing.T, searchDown bool) (*AIService, *gorm.DB) {
 	}))
 	t.Cleanup(searchServer.Close)
 	crawlServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&crawlHits, 1)
 		_, _ = w.Write([]byte(`{"title":"Deep Page","text":"full page text for grounding"}`))
 	}))
 	t.Cleanup(crawlServer.Close)
@@ -57,11 +61,11 @@ func newAITestEnv(t *testing.T, searchDown bool) (*AIService, *gorm.DB) {
 		nil,
 		3,
 	)
-	return service, db
+	return service, db, &crawlHits
 }
 
 func TestAnswerPersistsCitedResult(t *testing.T) {
-	service, db := newAITestEnv(t, false)
+	service, db, _ := newAITestEnv(t, false)
 	result, err := service.Answer(context.Background(), AskInput{Query: "  cheapest shipping to Japan  "})
 	if err != nil {
 		t.Fatal(err)
@@ -103,7 +107,7 @@ func TestAnswerPersistsCitedResult(t *testing.T) {
 }
 
 func TestAnswerDegradesGracefullyWhenSearchDown(t *testing.T) {
-	service, db := newAITestEnv(t, true)
+	service, db, _ := newAITestEnv(t, true)
 	result, err := service.Answer(context.Background(), AskInput{Query: "still answer me"})
 	if err != nil {
 		t.Fatal(err)
@@ -124,7 +128,7 @@ func TestAnswerDegradesGracefullyWhenSearchDown(t *testing.T) {
 }
 
 func TestAnswerFromURLSubmission(t *testing.T) {
-	service, _ := newAITestEnv(t, false)
+	service, _, _ := newAITestEnv(t, false)
 	result, err := service.Answer(context.Background(), AskInput{Query: "Summarize this page", URL: "https://example.com/article"})
 	if err != nil {
 		t.Fatal(err)
@@ -135,7 +139,7 @@ func TestAnswerFromURLSubmission(t *testing.T) {
 }
 
 func TestAnswerRejectsBlockedURL(t *testing.T) {
-	service, _ := newAITestEnv(t, false)
+	service, _, _ := newAITestEnv(t, false)
 	_, err := service.Answer(context.Background(), AskInput{Query: "Summarize this page", URL: "http://localhost:8090/admin"})
 	if !errors.Is(err, ErrURLBlocked) {
 		t.Fatalf("expected ErrURLBlocked, got %v", err)
@@ -143,14 +147,14 @@ func TestAnswerRejectsBlockedURL(t *testing.T) {
 }
 
 func TestAnswerRejectsEmptyQuery(t *testing.T) {
-	service, _ := newAITestEnv(t, false)
+	service, _, _ := newAITestEnv(t, false)
 	if _, err := service.Answer(context.Background(), AskInput{Query: "   "}); !errors.Is(err, ErrInvalidQuery) {
 		t.Fatalf("expected ErrInvalidQuery, got %v", err)
 	}
 }
 
 func TestAnswerRecordsSearchHistoryForLoggedInUsers(t *testing.T) {
-	service, db := newAITestEnv(t, false)
+	service, db, _ := newAITestEnv(t, false)
 	userID := uuid.New()
 	if _, err := service.Answer(context.Background(), AskInput{Query: "history recording test", UserID: &userID}); err != nil {
 		t.Fatal(err)
@@ -165,7 +169,7 @@ func TestAnswerRecordsSearchHistoryForLoggedInUsers(t *testing.T) {
 }
 
 func TestAnswerSkipsHistoryForURLSubmissions(t *testing.T) {
-	service, db := newAITestEnv(t, false)
+	service, db, _ := newAITestEnv(t, false)
 	userID := uuid.New()
 	if _, err := service.Answer(context.Background(), AskInput{Query: "Summarize this page", URL: "https://example.com/article", UserID: &userID}); err != nil {
 		t.Fatal(err)
@@ -173,5 +177,62 @@ func TestAnswerSkipsHistoryForURLSubmissions(t *testing.T) {
 	var count int64
 	if err := db.Model(&entities.SearchHistory{}).Count(&count).Error; err != nil || count != 0 {
 		t.Fatalf("URL submissions must not be recorded as history, got %d (err=%v)", count, err)
+	}
+}
+
+func TestAnswerSearchModeReturnsRawResultsWithoutAI(t *testing.T) {
+	service, db, crawlHits := newAITestEnv(t, false)
+	result, err := service.Answer(context.Background(), AskInput{Query: "best ramen in tokyo", Mode: ModeSearch})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Raw results only: no synthesized answer, no deep-read crawling.
+	if result.Answer != "" {
+		t.Fatalf("search mode must not synthesize an answer, got %q", result.Answer)
+	}
+	if len(result.Sources) != 2 {
+		t.Fatalf("expected 2 raw sources, got %d", len(result.Sources))
+	}
+	if atomic.LoadInt64(crawlHits) != 0 {
+		t.Fatalf("search mode must not deep-read sources, got %d crawler hits", *crawlHits)
+	}
+	// Sources are still persisted against the (empty) assistant message.
+	var sources []entities.SearchResult
+	if err := db.Where("message_id = ?", result.MessageID).Find(&sources).Error; err != nil || len(sources) != 2 {
+		t.Fatalf("expected 2 persisted sources, got %d (err=%v)", len(sources), err)
+	}
+	// The usage log is completed but is not attributed to any AI provider.
+	var usage entities.UsageLog
+	if err := db.First(&usage, "query = ?", "best ramen in tokyo").Error; err != nil {
+		t.Fatal(err)
+	}
+	if usage.Status != entities.MessageStatusCompleted || usage.ProviderID != nil {
+		t.Fatalf("search mode usage log should be completed without a provider, got %#v", usage)
+	}
+}
+
+func TestAnswerEnhancedModeDeepReadsSources(t *testing.T) {
+	service, _, crawlHits := newAITestEnv(t, false)
+	result, err := service.Answer(context.Background(), AskInput{Query: "deep read me", Mode: ModeEnhanced})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Answer == "" {
+		t.Fatal("enhanced mode must synthesize an answer")
+	}
+	if atomic.LoadInt64(crawlHits) == 0 {
+		t.Fatal("enhanced mode must deep-read the top sources")
+	}
+}
+
+func TestAnswerSearchModeStillRecordsHistory(t *testing.T) {
+	service, db, _ := newAITestEnv(t, false)
+	userID := uuid.New()
+	if _, err := service.Answer(context.Background(), AskInput{Query: "search only history", UserID: &userID, Mode: ModeSearch}); err != nil {
+		t.Fatal(err)
+	}
+	var entries []entities.SearchHistory
+	if err := db.Where("user_id = ?", userID).Find(&entries).Error; err != nil || len(entries) != 1 {
+		t.Fatalf("search mode must record history, got %#v (err=%v)", entries, err)
 	}
 }

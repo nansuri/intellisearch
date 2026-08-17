@@ -52,6 +52,7 @@ export async function upload<T>(path: string, field: string, file: File): Promis
 export type SiteSettings = { siteName: string; logoUrl: string | null; faviconUrl: string | null; tagline: string | null; googleSsoEnabled?: boolean }
 export type Source = { position: number; title: string; url: string; domain: string; snippet: string }
 export type GeoLocation = { latitude: number; longitude: number; accuracy?: number }
+export type AskMode = 'enhanced' | 'search'
 export type AskResult = { sessionId: string; messageId: string; answer: string; sources: Source[] }
 export type SessionMessage = { id: string; role: 'system' | 'user' | 'assistant'; content: string; status: string; createdAt: string; sources?: Source[] }
 export type ChatSession = { sessionId: string; title: string; createdAt: string; messages: SessionMessage[] }
@@ -78,8 +79,8 @@ export type Trends = { daily: TrendPoint[]; weekly: TrendPoint[] }
 
 // Public & ask
 export const getSite = () => request<SiteSettings>('/site')
-export const ask = (query: string, sessionId?: string, location?: GeoLocation) => {
-  const body: { query: string; sessionId?: string; location?: GeoLocation } = { query }
+export const ask = (query: string, sessionId?: string, location?: GeoLocation, mode: AskMode = 'enhanced') => {
+  const body: { query: string; sessionId?: string; location?: GeoLocation; mode?: AskMode } = { query, mode }
   if (sessionId) body.sessionId = sessionId
   if (location) body.location = location
   return request<AskResult>('/ask', { method: 'POST', body: JSON.stringify(body) })

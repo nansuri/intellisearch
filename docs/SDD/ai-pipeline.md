@@ -25,6 +25,11 @@ A single **AI handler** is the only entry point for all AI work. All AI requests
 4. **Synthesize** — the LLM (Ollama local, OpenAI-compatible, Pollinations.ai, or Hugging Face provider) produces a cited answer from the query + crawled content.
 5. **Persist & return** — write session/message/`search_results`, kill the crawl job, return the envelope to the UI.
 
+### Ask modes
+
+- **`mode: "enhanced"`** (default) — the full pipeline above: SearXNG → crawler deep-read → LLM synthesis with citations.
+- **`mode: "search"`** — SearXNG results only: the crawler and LLM stages are skipped entirely, `answer` returns empty, and the usage log is completed without an AI provider (so admin AI stats don't attribute it). Sessions, `search_results`, search history, and rate limits/quota still apply — useful when the local AI is unreliable or the user just wants fast raw results.
+
 ## 4. Ollama / LLM Requirements
 
 - Local Ollama (privacy-first; no user data leaves the server).

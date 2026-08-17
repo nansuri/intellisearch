@@ -8,7 +8,8 @@ import UrlAskBox from '../components/UrlAskBox.vue'
 import CollapsibleAnswer from '../components/CollapsibleAnswer.vue'
 import FollowUpBlock, { type FollowUpEntry } from '../components/FollowUpBlock.vue'
 import { useSiteStore } from '../stores/site'
-import { ask, askUrl, getSession, type Source } from '../services/api'
+import SourceCard from '../components/SourceCard.vue'
+import { ask, askUrl, getSession, type AskMode, type Source } from '../services/api'
 import { settleAskGhost } from '../services/motion'
 import { resolveLocationForQuery } from '../composables/useDeviceLocation'
 import { needsLocationContext } from '../utils/locationIntent'
@@ -22,6 +23,8 @@ onMounted(() => site.load())
 
 const query = computed(() => String(route.query.q || '').trim())
 const urlSessionId = computed(() => String(route.query.session || '').trim())
+// Ask mode: 'enhanced' runs the AI pipeline (default), 'search' returns raw web results.
+const mode = ref<AskMode>(route.query.mode === 'search' ? 'search' : 'enhanced')
 const loading = ref(false)
 const restoring = ref(false)
 const error = ref<string | null>(null)
@@ -127,6 +130,7 @@ function resetState() {
   usedLocation.value = false
   locationMissing.value = false
   followUpSeq = 0
+  mode.value = route.query.mode === 'search' ? 'search' : 'enhanced'
 }
 
 async function bootstrap() {
@@ -160,7 +164,7 @@ async function runInitial() {
     locating.value = false
     usedLocation.value = Boolean(location)
     if (needsLocationContext(query.value) && !location) locationMissing.value = true
-    const result = await ask(query.value, undefined, location)
+    const result = await ask(query.value, undefined, location, mode.value)
     answer.value = result.answer
     sources.value = result.sources || []
     sessionId.value = result.sessionId
@@ -202,7 +206,7 @@ async function followUp(question: string) {
     locating.value = false
     if (needsLocationContext(question) && !location) locationMissing.value = true
     else if (location) usedLocation.value = true
-    const result = await ask(question, sessionId.value, location)
+    const result = await ask(question, sessionId.value, location, mode.value)
     thread.value[index].answer = result.answer
     thread.value[index].sources = result.sources || []
     thread.value[index].loading = false
@@ -229,7 +233,16 @@ function onAsk(question: string) {
     followUp(question)
     return
   }
-  router.push({ path: '/search', query: { q: question } })
+  router.push({ path: '/search', query: { q: question, mode: mode.value } })
+}
+
+// Switches a search-only result to the enhanced pipeline and re-runs it.
+function upgradeToEnhanced() {
+  if (mode.value === 'enhanced') return
+  resetState()
+  mode.value = 'enhanced'
+  router.replace({ path: '/search', query: { q: query.value, mode: 'enhanced' } })
+  void runInitial()
 }
 
 async function submitUrl(url: string) {
@@ -300,15 +313,15 @@ watch(
       <ErrorBanner v-if="error && !loading && !restoring" :message="error" @retry="runInitial" />
 
       <article v-if="loading || restoring" class="summary-card">
-        <div class="section-label">AI overview</div>
+        <div class="section-label">{{ mode === 'search' ? 'Web results' : 'AI overview' }}</div>
         <div class="skeleton-line" />
         <div class="skeleton-line skeleton-line--short" />
         <div class="skeleton-line" />
-        <div class="summary-note">{{ restoring ? 'Loading your previous answer…' : 'Searching the web and reading the best sources…' }}</div>
+        <div class="summary-note">{{ restoring ? 'Loading your previous answer…' : mode === 'search' ? 'Searching the web…' : 'Searching the web and reading the best sources…' }}</div>
       </article>
 
       <CollapsibleAnswer
-        v-else
+        v-else-if="mode === 'enhanced'"
         label="AI overview"
         :answer="answer"
         :sources="sources"
@@ -316,7 +329,33 @@ watch(
         @update:collapsed="(value) => { primaryCollapsed = value; persistState() }"
       />
 
-      <section v-if="!loading && !restoring && !sources.length && !primaryCollapsed" class="empty-sources" :class="{ 'empty-sources--compact': Boolean(answer) }">
+      <section v-else class="search-results-only">
+        <div class="search-results-head">
+          <div>
+            <div class="section-label">Web results</div>
+            <h2 class="search-results-title">Top matches</h2>
+          </div>
+          <button type="button" class="base-button button-secondary search-upgrade" @click="upgradeToEnhanced">Ask AI for a summary</button>
+        </div>
+        <p class="search-only-note">Raw web results — Enhanced Ask adds an AI-synthesized answer with citations.</p>
+        <div v-if="sources.length" class="sources">
+          <div class="sources-heading"><h2>Results</h2><span>{{ sources.length }} found</span></div>
+          <SourceCard v-for="source in sources" :key="source.position" :source="source" />
+        </div>
+        <div v-else class="empty-sources">
+          <div class="empty-source-copy">
+            <h2>No web results found</h2>
+            <p>Try rewording your question, or submit a URL for the AI to read that page directly.</p>
+          </div>
+          <div class="url-ask-wrap">
+            <UrlAskBox @submit="submitUrl" />
+            <p v-if="urlLoading" class="empty-note">Reading that page…</p>
+            <p v-else-if="urlError" class="empty-note empty-note--error">{{ urlError }}</p>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="!loading && !restoring && mode === 'enhanced' && !sources.length && !primaryCollapsed" class="empty-sources" :class="{ 'empty-sources--compact': Boolean(answer) }">
         <div class="empty-source-copy">
           <h2 v-if="!answer">No web sources yet</h2>
           <p>{{ answer ? 'No web sources for this answer. Submit a URL to read a specific page.' : 'Ask a different question, or submit a URL and the AI will read that page directly.' }}</p>
@@ -339,6 +378,7 @@ watch(
           :entry="entry"
           :index="index"
           :active="entry.id === activeFollowUpId"
+          :search-only="mode === 'search'"
           @update:collapsed="setFollowUpCollapsed(entry.id, $event)"
         />
       </section>
@@ -347,6 +387,13 @@ watch(
 </template>
 
 <style scoped>
+.search-results-only { margin-top: 38px; padding: 0 0 28px; border-bottom: 1px solid var(--color-border); }
+.search-results-head { display: flex; align-items: end; justify-content: space-between; gap: 18px; }
+.search-results-title { margin: 6px 0 0; font-size: 1.35rem; letter-spacing: -.03em; }
+.search-upgrade { flex: 0 0 auto; }
+.search-only-note { margin: 10px 0 0; color: var(--color-muted); font-size: .82rem; }
+.search-results-only .sources { margin-top: 22px; }
+@media (max-width: 520px) { .search-results-head { align-items: flex-start; flex-direction: column; } }
 .empty-sources--compact {
   margin-top: 8px;
   padding-top: 18px;
