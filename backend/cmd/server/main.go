@@ -40,7 +40,7 @@ func main() {
 
 	siteService := services.NewSiteService(repositories.NewSiteRepository(db))
 	userRepository := repositories.NewUserRepository(db)
-	authService := services.NewAuthService(userRepository, cfg)
+	authService := services.NewAuthService(userRepository, repositories.NewQueueConfigRepository(db), cfg)
 	usageLogRepository := repositories.NewUsageLogRepository(db)
 	searchHistoryRepository := repositories.NewSearchHistoryRepository(db)
 	userService := services.NewUserService(userRepository, usageLogRepository, cfg.UploadsDir)

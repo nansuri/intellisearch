@@ -85,7 +85,7 @@ export type UsersPage = { users: User[]; total: number; page: number; pageSize: 
 export type ProviderType = 'ollama' | 'openai_compatible' | 'pollinations' | 'huggingface'
 export type Provider = { id: string; name: string; providerType: ProviderType; baseUrl: string; model: string; parameters: Record<string, unknown> | null; isActive: boolean }
 export type HistoryItem = { id: number; query: string; createdAt: string; sessionId?: string; summary?: string }
-export type QueueConfig = { maxConcurrent: number; maxQueueSize: number; requestTimeoutMs: number; perUserRateLimit: number; suggestionCacheHours: number }
+export type QueueConfig = { maxConcurrent: number; maxQueueSize: number; requestTimeoutMs: number; perUserRateLimit: number; suggestionCacheHours: number; defaultDailyQuota: number }
 export type OllamaModel = { name: string; size: number; parameterSize?: string; quantization?: string }
 export type OllamaRunningModel = { name: string; size: number; sizeVram: number; cpu?: string; gpu?: string; memory?: string }
 export type OllamaHealth = { version: string; runningModels: OllamaRunningModel[] }
@@ -96,6 +96,9 @@ export type ErrorGroup = { errorCode: string; errorMessage: string; count: numbe
 export type AIStats = { totalCompleted: number; totalFailed: number; successRate: number; errors: ErrorGroup[]; latency: { averageMs: number; p50: number; p95: number; p99: number }; providers: { providerId: string | null; name: string; model: string; successes: number; total: number; rate: number }[]; queue: { queueDepth: number; inFlight: number; rejected: number; maxConcurrent: number } }
 export type TrendPoint = { label: string; count: number }
 export type Trends = { daily: TrendPoint[]; weekly: TrendPoint[] }
+export type WordCount = { word: string; count: number }
+export type WordTrendBucket = { label: string; top: WordCount[] }
+export type TrendingWords = { window: 'daily' | 'weekly'; buckets: WordTrendBucket[]; overall: WordCount[] }
 
 // Public & ask
 export const getSite = () => request<SiteSettings>('/site')
@@ -136,6 +139,7 @@ export const deleteUser = (id: string) => request<{ deleted: boolean }>(`/admin/
 // Admin — statistics
 export const getUserStats = () => request<UserStats>('/admin/stats')
 export const getTrends = () => request<Trends>('/admin/stats/trends')
+export const getTrendingWords = (window: 'daily' | 'weekly' = 'daily') => request<TrendingWords>(`/admin/stats/trending-words?window=${window}`)
 export const getAIStats = (type = '') => request<AIStats>(`/admin/stats/ai${type ? `?type=${encodeURIComponent(type)}` : ''}`)
 
 // Admin — AI providers & queue

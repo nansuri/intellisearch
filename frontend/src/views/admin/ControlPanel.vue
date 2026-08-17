@@ -15,7 +15,7 @@ const route = useRoute()
 const groups = [
   { label: 'Dashboard', icon: 'dashboard', items: [{ to: '/admin', label: 'Overview' }] },
   { label: 'Users', icon: 'users', items: [{ to: '/admin/users', label: 'All users' }, { to: '/admin/users/suspended', label: 'Suspended' }] },
-  { label: 'Statistics', icon: 'stats', items: [{ to: '/admin/stats', label: 'Overview' }, { to: '/admin/stats/top', label: 'Top queries' }, { to: '/admin/stats/usage', label: 'Per-user usage' }, { to: '/admin/stats/ai', label: 'AI service' }] },
+  { label: 'Statistics', icon: 'stats', items: [{ to: '/admin/stats', label: 'Overview' }, { to: '/admin/stats/top', label: 'Top queries' }, { to: '/admin/stats/words', label: 'Trending words' }, { to: '/admin/stats/usage', label: 'Per-user usage' }, { to: '/admin/stats/ai', label: 'AI service' }] },
   { label: 'AI providers', icon: 'ai', items: [{ to: '/admin/ai/providers', label: 'Providers' }, { to: '/admin/ai/queue', label: 'Queue & limits' }] },
   { label: 'Branding', icon: 'branding', items: [{ to: '/admin/branding/identity', label: 'Identity' }, { to: '/admin/branding/logo', label: 'Logo' }] },
 ]

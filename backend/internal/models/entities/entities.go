@@ -57,7 +57,12 @@ type AIQueueConfig struct {
 	RequestTimeoutMS     int       `gorm:"not null" json:"requestTimeoutMs"`
 	PerUserRateLimit     int       `gorm:"not null" json:"perUserRateLimit"`
 	SuggestionCacheHours int       `gorm:"not null;default:6" json:"suggestionCacheHours"`
-	UpdatedAt            time.Time `json:"updatedAt"`
+	// DefaultDailyQuota is the daily AI-usage quota applied to newly registered
+	// users (password or Google SSO). 0 means unlimited, matching the per-user
+	// AIDailyQuota semantics; the Owner Control Panel can change it anytime and
+	// it only affects accounts created afterwards.
+	DefaultDailyQuota int       `gorm:"not null;default:3" json:"defaultDailyQuota"`
+	UpdatedAt         time.Time `json:"updatedAt"`
 }
 
 type AIProvider struct {

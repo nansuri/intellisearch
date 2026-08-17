@@ -34,6 +34,7 @@ const tiles = [
   { to: '/admin/users', label: 'User management', desc: 'Search, create, edit, suspend, and delete accounts.', icon: 'user-list' },
   { to: '/admin/users/suspended', label: 'Suspended users', desc: 'Review and reinstate suspended accounts.', icon: 'suspended' },
   { to: '/admin/stats', label: 'Statistics', desc: 'Platform activity, trends, and top queries.', icon: 'chart' },
+  { to: '/admin/stats/words', label: 'Trending words', desc: 'Most-searched terms over time — queries stay masked.', icon: 'chart' },
   { to: '/admin/stats/usage', label: 'Per-user usage', desc: 'Who asks the most, and who fails the most.', icon: 'usage' },
   { to: '/admin/stats/ai', label: 'AI service', desc: 'Success rate, errors, latency, and queue health.', icon: 'robot' },
   { to: '/admin/ai/providers', label: 'AI providers', desc: 'Configure Ollama or OpenAI-compatible providers.', icon: 'settings' },

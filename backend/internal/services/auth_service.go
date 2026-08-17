@@ -31,6 +31,7 @@ type Claims struct {
 }
 type AuthService struct {
 	users              *repositories.UserRepository
+	queueConfig        *repositories.QueueConfigRepository
 	secret             []byte
 	ttl                time.Duration
 	googleClientID     string
@@ -42,13 +43,14 @@ type AuthService struct {
 	googleUserInfoURL  string
 }
 
-func NewAuthService(users *repositories.UserRepository, cfg config.Config) *AuthService {
+func NewAuthService(users *repositories.UserRepository, queueConfig *repositories.QueueConfigRepository, cfg config.Config) *AuthService {
 	ttl := time.Duration(cfg.JWTTTLHours) * time.Hour
 	if ttl <= 0 {
 		ttl = 24 * time.Hour
 	}
 	return &AuthService{
 		users:              users,
+		queueConfig:        queueConfig,
 		secret:             []byte(cfg.JWTSecret),
 		ttl:                ttl,
 		googleClientID:     cfg.GoogleClientID,
@@ -59,6 +61,18 @@ func NewAuthService(users *repositories.UserRepository, cfg config.Config) *Auth
 		googleTokenURL:     "https://oauth2.googleapis.com/token",
 		googleUserInfoURL:  "https://www.googleapis.com/oauth2/v2/userinfo",
 	}
+}
+
+// defaultDailyQuota returns the admin-configurable daily AI-usage quota for
+// newly registered accounts, falling back to 3 when the config row is missing
+// (e.g. before seeding). 0 means unlimited, matching per-user semantics.
+func (s *AuthService) defaultDailyQuota() int {
+	if s.queueConfig != nil {
+		if config, err := s.queueConfig.Get(); err == nil {
+			return config.DefaultDailyQuota
+		}
+	}
+	return 3
 }
 
 // GoogleConfigured reports whether Google SSO credentials are present.
@@ -122,7 +136,8 @@ func (s *AuthService) GoogleCallback(code, state, expectedState string) (string,
 		user = entities.User{
 			ID: uuid.New(), Name: name, Email: email, PasswordHash: string(hash),
 			Role: entities.RoleGeneralUser, Status: entities.StatusActive,
-			CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+			AIDailyQuota: s.defaultDailyQuota(),
+			CreatedAt:    time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 		}
 		if profile.Picture != "" {
 			avatar := profile.Picture
@@ -205,7 +220,8 @@ func (s *AuthService) Register(name, email, password string) (string, entities.U
 	user := entities.User{
 		ID: uuid.New(), Name: name, Email: email, PasswordHash: string(hash),
 		Role: entities.RoleGeneralUser, Status: entities.StatusActive,
-		CreatedAt: now, UpdatedAt: now,
+		AIDailyQuota: s.defaultDailyQuota(),
+		CreatedAt:    now, UpdatedAt: now,
 	}
 	if err := s.users.Create(&user); err != nil {
 		return "", entities.User{}, err

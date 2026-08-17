@@ -16,7 +16,7 @@
 | created_at | timestamptz | |
 | last_login_at | timestamptz | |
 | avatar_url | varchar | nullable; uploaded image or default avatar |
-| ai_daily_quota | int | daily question cap; 0 = unlimited (global default applies) |
+| ai_daily_quota | int | daily question cap; 0 = unlimited. Newly registered accounts start at `ai_queue_config.default_daily_quota` (default 3); editable per user from the Owner Control Panel |
 
 ### chat_sessions
 | Field | Type | Notes |
@@ -87,6 +87,7 @@
 | request_timeout_ms | int | |
 | per_user_rate_limit | int | questions per minute per user; 0 = unlimited |
 | suggestion_cache_hours | int | hours the AI-composed history suggestions are reused per user before recomposing; 0 = always compose fresh. Editable from the Owner Control Panel (Queue & limits). |
+| default_daily_quota | int | daily AI-usage quota granted to newly registered accounts (password or Google SSO); 0 = unlimited. Default 3. Editable from the Owner Control Panel (Queue & limits); affects only accounts created afterwards. |
 
 ### site_settings (singleton row)
 | Field | Type | Notes |
@@ -124,7 +125,7 @@
 | provider_id | UUID (FK → ai_providers) | |
 | created_at | timestamptz | |
 
-> `usage_logs` powers the AI statistics panel (success/failure rate, error list, latency percentiles).
+> `usage_logs` powers the AI statistics panel (success/failure rate, error list, latency percentiles). **Privacy:** the control panel never receives verbatim queries — `topQueries` are masked (first rune + `*`s) and the trending-words view aggregates lowercase terms per time bucket (stopwords dropped), so admins see *what* is trending without any user's exact query.
 
 ### anonymous_usage
 | Field | Type | Notes |

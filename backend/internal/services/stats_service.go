@@ -1,10 +1,13 @@
 package services
 
 import (
-	"intellisearch/internal/repositories"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
+	"unicode"
+
+	"intellisearch/internal/repositories"
 )
 
 // QueueMetricsProvider lets the stats panel read live queue health without the
@@ -85,6 +88,29 @@ type Trends struct {
 	Weekly []TrendPoint `json:"weekly"`
 }
 
+// WordCount is one aggregated search term with its frequency. Terms are
+// tokenized from queries, so the admin sees word-level trends without any raw
+// query text.
+type WordCount struct {
+	Word  string `json:"word"`
+	Count int64  `json:"count"`
+}
+
+// WordTrendBucket is the top terms for one time bucket (a day or a week).
+type WordTrendBucket struct {
+	Label string      `json:"label"`
+	Top   []WordCount `json:"top"`
+}
+
+// TrendingWords is the word-level trend view for the control panel: per-bucket
+// top terms (for a chart) plus the overall top terms for the window. Every
+// term is aggregated and lowercased — never a verbatim query.
+type TrendingWords struct {
+	Window  string            `json:"window"`
+	Buckets []WordTrendBucket `json:"buckets"`
+	Overall []WordCount       `json:"overall"`
+}
+
 type StatsService struct {
 	usage     *repositories.UsageLogRepository
 	users     *repositories.UserRepository
@@ -128,7 +154,9 @@ func (s *StatsService) UserStats() (UserStats, error) {
 	}
 	topQueries := make([]TopQuery, 0, len(top))
 	for _, row := range top {
-		topQueries = append(topQueries, TopQuery{Query: row.Query, Count: row.Count})
+		// Privacy: the control panel never sees verbatim queries — only a masked
+		// placeholder so counts stay meaningful without revealing user input.
+		topQueries = append(topQueries, TopQuery{Query: MaskQuery(row.Query), Count: row.Count})
 	}
 	perUserUsage := make([]PerUserUsage, 0, len(perUser))
 	for _, row := range perUser {
@@ -247,6 +275,134 @@ func weekStartUTC(now time.Time) time.Time {
 	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	offset := (int(day.Weekday()) + 6) % 7 // Monday = 0
 	return day.AddDate(0, 0, -offset)
+}
+
+// MaskQuery hides all but the first rune of a query so the control panel can
+// show "what people searched" (with counts) without revealing the actual query
+// text. Very short inputs are fully hidden to avoid leaking even the prefix.
+func MaskQuery(query string) string {
+	runes := []rune(strings.TrimSpace(query))
+	if len(runes) == 0 {
+		return ""
+	}
+	if len(runes) <= 2 {
+		return "•"
+	}
+	return string(runes[0]) + strings.Repeat("*", len(runes)-1)
+}
+
+// TrendingWords tokenizes stored queries into lowercase terms and aggregates
+// them per time bucket (daily over 7 days, or weekly over 8 weeks), plus the
+// overall top terms for the window. Raw queries never leave this method — the
+// API only returns aggregated word counts.
+func (s *StatsService) TrendingWords(window string) (TrendingWords, error) {
+	now := time.Now().UTC()
+	isWeekly := window == "weekly"
+	if !isWeekly {
+		window = "daily"
+	}
+	start := now.AddDate(0, 0, -7*8)
+	logs, err := s.usage.QueriesSince(start)
+	if err != nil {
+		return TrendingWords{}, err
+	}
+	count := 7
+	if isWeekly {
+		count = 8
+	}
+	buckets := make([]WordTrendBucket, 0, count)
+	for i := 0; i < count; i++ {
+		bucketStart, bucketEnd := bucketBounds(now, i, isWeekly)
+		counts := map[string]int64{}
+		for _, log := range logs {
+			if !log.CreatedAt.Before(bucketStart) && log.CreatedAt.Before(bucketEnd) {
+				for _, word := range tokenizeWords(log.Query) {
+					counts[word]++
+				}
+			}
+		}
+		buckets = append(buckets, WordTrendBucket{Label: bucketStart.Format("2006-01-02"), Top: topWords(counts, 8)})
+	}
+	overall := map[string]int64{}
+	for _, log := range logs {
+		for _, word := range tokenizeWords(log.Query) {
+			overall[word]++
+		}
+	}
+	return TrendingWords{Window: window, Buckets: buckets, Overall: topWords(overall, 10)}, nil
+}
+
+// bucketBounds returns the half-open [start, end) window for a bucket index
+// (0 = oldest). Daily buckets are UTC days; weekly buckets are Monday-based
+// weeks, matching the Trends() bucketing.
+func bucketBounds(now time.Time, index int, weekly bool) (time.Time, time.Time) {
+	if weekly {
+		week := weekStartUTC(now)
+		start := week.AddDate(0, 0, -7*(7-index))
+		return start, start.AddDate(0, 0, 7)
+	}
+	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	start := day.AddDate(0, 0, index-6)
+	return start, start.AddDate(0, 0, 1)
+}
+
+// topWords returns the highest-count terms, ties broken by word for stability.
+func topWords(counts map[string]int64, limit int) []WordCount {
+	if limit < 1 {
+		limit = 10
+	}
+	words := make([]string, 0, len(counts))
+	for word := range counts {
+		words = append(words, word)
+	}
+	sort.Slice(words, func(i, j int) bool {
+		if counts[words[i]] != counts[words[j]] {
+			return counts[words[i]] > counts[words[j]]
+		}
+		return words[i] < words[j]
+	})
+	result := make([]WordCount, 0, min(len(words), limit))
+	for _, word := range words {
+		if len(result) == limit {
+			break
+		}
+		result = append(result, WordCount{Word: word, Count: counts[word]})
+	}
+	return result
+}
+
+// stopwords are common English terms filtered from the word trends so the
+// graph shows meaningful keywords instead of filler. Keep the list compact;
+// any word shorter than 3 runes is also dropped.
+var stopwords = map[string]bool{
+	"the": true, "and": true, "for": true, "are": true, "was": true, "were": true,
+	"with": true, "from": true, "what": true, "when": true, "where": true, "which": true,
+	"that": true, "this": true, "your": true, "you": true, "how": true, "why": true,
+	"who": true, "can": true, "does": true, "did": true, "not": true, "but": true,
+	"all": true, "any": true, "has": true, "have": true, "its": true, "our": true,
+	"about": true, "into": true, "than": true, "then": true, "them": true, "they": true,
+	"will": true, "would": true, "could": true, "should": true, "please": true,
+	"tell": true, "give": true, "find": true, "show": true, "need": true, "want": true,
+}
+
+// tokenizeWords splits a query into lowercase terms, dropping stopwords and
+// words shorter than three runes.
+func tokenizeWords(query string) []string {
+	fields := strings.FieldsFunc(strings.ToLower(query), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+	seen := map[string]bool{}
+	result := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if len([]rune(field)) < 3 || stopwords[field] {
+			continue
+		}
+		if !seen[field] {
+			seen[field] = true
+			result = append(result, field)
+		}
+	}
+	return result
 }
 
 // weekNumber computes the ISO-like week number for a Monday-based week.

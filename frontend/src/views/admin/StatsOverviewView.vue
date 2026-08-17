@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { getAIStats, getTrends, getUserStats, type AIStats, type Trends, type UserStats } from '../../services/api'
+import { getAIStats, getTrends, getTrendingWords, getUserStats, type AIStats, type Trends, type TrendingWords, type UserStats } from '../../services/api'
 import { useToastStore } from '../../stores/toast'
 import PageHeader from '../../components/PageHeader.vue'
 import StatCard from '../../components/StatCard.vue'
@@ -15,15 +15,17 @@ const toast = useToastStore()
 const stats = ref<UserStats | null>(null)
 const trends = ref<Trends | null>(null)
 const aiStats = ref<AIStats | null>(null)
+const words = ref<TrendingWords | null>(null)
 const loading = ref(true)
 const maxTop = (s: UserStats | null) => Math.max(1, ...(s?.topQueries.map((q) => q.count) || [1]))
 const maxUser = (s: UserStats | null) => Math.max(1, ...(s?.perUserUsage.map((u) => u.count) || [1]))
+const maxWord = (w: TrendingWords | null) => Math.max(1, ...(w?.overall.map((t) => t.count) || [1]))
 
 async function load() {
   loading.value = true
   try {
-    const [s, t, a] = await Promise.all([getUserStats(), getTrends(), getAIStats()])
-    stats.value = s; trends.value = t; aiStats.value = a
+    const [s, t, a, w] = await Promise.all([getUserStats(), getTrends(), getAIStats(), getTrendingWords()])
+    stats.value = s; trends.value = t; aiStats.value = a; words.value = w
   } catch (e) { toast.error((e as Error).message) } finally { loading.value = false }
 }
 onMounted(load)
@@ -100,6 +102,17 @@ const alerts = computed(() => {
           </li>
         </ul>
         <EmptyState v-else title="No queries yet" message="Questions will appear here as users ask." />
+        <p class="privacy-note">Queries are masked to protect users — see <router-link class="admin-site-link" to="/admin/stats/words">trending words</router-link> for search-term insights.</p>
+      </section>
+      <section class="admin-card">
+        <div class="mini-head"><h2>Most searched words</h2><router-link class="admin-site-link" to="/admin/stats/words">View trends</router-link></div>
+        <ul v-if="words?.overall.length" class="rank-list">
+          <li v-for="t in words.overall.slice(0, 5)" :key="t.word">
+            <span class="rank-bar" :style="{ width: `${(t.count / maxWord(words)) * 100}%` }"></span>
+            <span class="rank-query">{{ t.word }}</span><span class="rank-count">{{ t.count }}</span>
+          </li>
+        </ul>
+        <EmptyState v-else title="No words yet" message="Search terms will appear here as users ask." />
       </section>
       <section class="admin-card">
         <div class="mini-head"><h2>Heaviest users</h2><router-link class="admin-site-link" to="/admin/stats/usage">View all</router-link></div>
@@ -117,4 +130,5 @@ const alerts = computed(() => {
 
 <style scoped>
 .admin-alerts { display: grid; gap: 10px; margin-bottom: 18px; }
+.privacy-note { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--color-border); color: var(--color-muted); font-size: .76rem; line-height: 1.5; }
 </style>

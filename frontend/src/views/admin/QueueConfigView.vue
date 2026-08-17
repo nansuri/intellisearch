@@ -9,7 +9,7 @@ import LoadingSpinner from '../../components/LoadingSpinner.vue'
 const toast = useToastStore()
 const config = ref<QueueConfig | null>(null)
 const loading = ref(true); const saving = ref(false)
-const draft = ref({ maxConcurrent: 4, maxQueueSize: 100, requestTimeoutMs: 120000, perUserRateLimit: 10, suggestionCacheHours: 6 })
+const draft = ref({ maxConcurrent: 4, maxQueueSize: 100, requestTimeoutMs: 120000, perUserRateLimit: 10, suggestionCacheHours: 6, defaultDailyQuota: 3 })
 
 async function load() {
   loading.value = true
@@ -18,7 +18,7 @@ async function load() {
 async function save() {
   saving.value = true
   try {
-    config.value = await updateQueueConfig({ ...draft.value, maxConcurrent: Number(draft.value.maxConcurrent), maxQueueSize: Number(draft.value.maxQueueSize), requestTimeoutMs: Number(draft.value.requestTimeoutMs), perUserRateLimit: Number(draft.value.perUserRateLimit), suggestionCacheHours: Number(draft.value.suggestionCacheHours) })
+    config.value = await updateQueueConfig({ ...draft.value, maxConcurrent: Number(draft.value.maxConcurrent), maxQueueSize: Number(draft.value.maxQueueSize), requestTimeoutMs: Number(draft.value.requestTimeoutMs), perUserRateLimit: Number(draft.value.perUserRateLimit), suggestionCacheHours: Number(draft.value.suggestionCacheHours), defaultDailyQuota: Number(draft.value.defaultDailyQuota) })
     toast.success('Queue settings applied immediately.')
   } catch (e) { toast.error((e as Error).message) } finally { saving.value = false }
 }
@@ -44,6 +44,9 @@ onMounted(async () => { await load(); if (config.value) Object.assign(draft.valu
         </FormField>
         <FormField label="Suggestion cache (hours)" hint="How long AI-composed suggestions on the main page are reused before being recomposed (0 = always compose fresh)">
           <input v-model.number="draft.suggestionCacheHours" type="number" class="text-input" min="0" required />
+        </FormField>
+        <FormField label="Default daily quota" hint="AI usage per day granted to newly registered accounts (0 = unlimited). Existing users keep their own quota.">
+          <input v-model.number="draft.defaultDailyQuota" type="number" class="text-input" min="0" required />
         </FormField>
       </div>
       <p class="form-hint">When the queue is full, users see a friendly “try again in a moment” message rather than an error.</p>

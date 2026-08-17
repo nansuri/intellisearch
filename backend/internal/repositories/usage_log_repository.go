@@ -41,6 +41,23 @@ func (r *UsageLogRepository) CreatedSince(start time.Time) ([]time.Time, error) 
 	return values, err
 }
 
+// QueryLog pairs a stored query with its timestamp; QueriesSince feeds the
+// admin trending-words aggregation. Queries are sanitized at write time, and
+// the aggregation service only ever emits word counts — raw query text is
+// never returned to the control panel.
+type QueryLog struct {
+	Query     string
+	CreatedAt time.Time
+}
+
+// QueriesSince returns every query and its timestamp since start, oldest first.
+// The caller aggregates word frequencies; raw queries never leave the service.
+func (r *UsageLogRepository) QueriesSince(start time.Time) ([]QueryLog, error) {
+	var rows []QueryLog
+	err := r.db.Model(&entities.UsageLog{}).Select("query, created_at").Where("created_at >= ?", start).Order("created_at asc").Scan(&rows).Error
+	return rows, err
+}
+
 // CountFailedSince counts failed asks (with an error code) since start.
 func (r *UsageLogRepository) CountFailedSince(start time.Time) (int64, error) {
 	var count int64

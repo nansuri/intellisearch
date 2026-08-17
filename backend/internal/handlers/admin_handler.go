@@ -134,6 +134,17 @@ func (h *AdminHandler) Trends(c *gin.Context) {
 	middleware.JSON(c, http.StatusOK, contracts.OK(trends))
 }
 
+// TrendingWords returns word-level search trends (aggregated, masked — never
+// verbatim queries) for the control panel's privacy-safe trending chart.
+func (h *AdminHandler) TrendingWords(c *gin.Context) {
+	trends, err := h.stats.TrendingWords(c.Query("window"))
+	if err != nil {
+		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.ADMN02001, "Trend statistics could not be computed."))
+		return
+	}
+	middleware.JSON(c, http.StatusOK, contracts.OK(trends))
+}
+
 func (h *AdminHandler) ListProviders(c *gin.Context) {
 	providers, err := h.admin.Providers()
 	if err != nil {
@@ -254,12 +265,13 @@ func (h *AdminHandler) UpdateQueueConfig(c *gin.Context) {
 		RequestTimeoutMS     int `json:"requestTimeoutMs"`
 		PerUserRateLimit     int `json:"perUserRateLimit"`
 		SuggestionCacheHours int `json:"suggestionCacheHours"`
+		DefaultDailyQuota    int `json:"defaultDailyQuota"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
 		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN04001, "Enter valid queue settings."))
 		return
 	}
-	config, err := h.admin.UpdateQueueConfig(request.MaxConcurrent, request.MaxQueueSize, request.RequestTimeoutMS, request.PerUserRateLimit, request.SuggestionCacheHours)
+	config, err := h.admin.UpdateQueueConfig(request.MaxConcurrent, request.MaxQueueSize, request.RequestTimeoutMS, request.PerUserRateLimit, request.SuggestionCacheHours, request.DefaultDailyQuota)
 	if err != nil {
 		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN04001, "That queue configuration is not valid."))
 		return

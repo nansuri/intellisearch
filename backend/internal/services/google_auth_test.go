@@ -43,7 +43,8 @@ func googleMock(t *testing.T, email, name, picture string, status int) (*AuthSer
 		GoogleRedirectURL:  "http://localhost:5173/api/v1/auth/google/callback",
 		FrontendOrigin:     "http://localhost:5173",
 	}
-	service := NewAuthService(repositories.NewUserRepository(newTestDB(t)), cfg)
+	db := newTestDB(t)
+	service := NewAuthService(repositories.NewUserRepository(db), repositories.NewQueueConfigRepository(db), cfg)
 	service.googleTokenURL = token.URL
 	service.googleUserInfoURL = userinfo.URL
 	return service, userinfo
@@ -70,6 +71,9 @@ func TestGoogleCallbackCreatesAndReusesUser(t *testing.T) {
 	}
 	if token == "" || user.Email != "jane@example.com" || user.Name != "Jane Doe" || user.Role != "general_user" {
 		t.Fatalf("unexpected first sign-in result: token=%q user=%+v", token, user)
+	}
+	if user.AIDailyQuota != 3 {
+		t.Fatalf("new google users must get the default quota (3), got %d", user.AIDailyQuota)
 	}
 	if user.AvatarURL == nil || *user.AvatarURL != "https://pics.example/jane.png" {
 		t.Fatalf("google avatar not stored: %v", user.AvatarURL)
@@ -101,7 +105,8 @@ func TestGoogleCallbackHandlesProviderError(t *testing.T) {
 
 func TestGoogleNotConfigured(t *testing.T) {
 	cfg := config.Config{JWTSecret: "no-google-secret-32-chars-minimum", JWTTTLHours: 24}
-	service := NewAuthService(repositories.NewUserRepository(newTestDB(t)), cfg)
+	db := newTestDB(t)
+	service := NewAuthService(repositories.NewUserRepository(db), repositories.NewQueueConfigRepository(db), cfg)
 	if service.GoogleConfigured() {
 		t.Fatal("expected google not configured with empty credentials")
 	}

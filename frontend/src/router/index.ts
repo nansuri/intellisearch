@@ -30,6 +30,7 @@ const routes = [
       { path: 'users/suspended', component: () => import('../views/admin/SuspendedUsersView.vue') },
       { path: 'stats', component: () => import('../views/admin/StatsOverviewView.vue') },
       { path: 'stats/top', component: () => import('../views/admin/TopQueriesView.vue') },
+      { path: 'stats/words', component: () => import('../views/admin/TrendingWordsView.vue') },
       { path: 'stats/usage', component: () => import('../views/admin/PerUserUsageView.vue') },
       { path: 'stats/ai', component: () => import('../views/admin/AIServiceStatsView.vue') },
       { path: 'ai/providers', component: () => import('../views/admin/ProvidersView.vue') },

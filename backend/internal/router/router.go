@@ -59,6 +59,7 @@ func New(corsOrigins, uploadsDir string, siteService *services.SiteService, auth
 	admin.DELETE("/users/:id", adminHandler.DeleteUser)
 	admin.GET("/stats", adminHandler.Stats)
 	admin.GET("/stats/trends", adminHandler.Trends)
+	admin.GET("/stats/trending-words", adminHandler.TrendingWords)
 	admin.GET("/stats/ai", adminHandler.AIStats)
 	admin.GET("/ai/providers", adminHandler.ListProviders)
 	admin.POST("/ai/providers", adminHandler.CreateProvider)

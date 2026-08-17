@@ -65,7 +65,7 @@ func adminTestMux(t *testing.T) (*httptest.Server, *gorm.DB) {
 	}
 
 	cfg := config.Config{JWTSecret: "admin-test-secret-32-chars-minimum", JWTTTLHours: 24}
-	authService := services.NewAuthService(repositories.NewUserRepository(db), cfg)
+	authService := services.NewAuthService(repositories.NewUserRepository(db), repositories.NewQueueConfigRepository(db), cfg)
 	userService := services.NewUserService(repositories.NewUserRepository(db), repositories.NewUsageLogRepository(db), t.TempDir())
 	historyService := services.NewSearchHistoryService(repositories.NewSearchHistoryRepository(db), repositories.NewMessageRepository(db), services.NewLLMService(repositories.NewProviderRepository(db), cfg.JWTSecret), repositories.NewQueueConfigRepository(db))
 	adminService := services.NewAdminService(repositories.NewProviderRepository(db), repositories.NewQueueConfigRepository(db), repositories.NewSiteRepository(db), cfg.JWTSecret, t.TempDir())
@@ -312,6 +312,56 @@ func TestAdminLogoDeleteAndTrends(t *testing.T) {
 	today := now.Format("2006-01-02")
 	if withData.Data.Daily[6].Label != today || withData.Data.Daily[6].Count != 1 {
 		t.Fatalf("expected today's point (%s) to count 1, got label=%s count=%d", today, withData.Data.Daily[6].Label, withData.Data.Daily[6].Count)
+	}
+
+	// Admin stats never leak verbatim queries: topQueries are masked.
+	status, payload = call(t, server, http.MethodGet, "/api/v1/admin/stats", token, nil)
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"topQueries"`)) || bytes.Contains(payload, []byte(`"query":"sample"`)) {
+		t.Fatalf("admin stats must mask queries: %d %s", status, payload)
+	}
+
+	// The trending-words endpoint aggregates the query into a term without
+	// revealing it, for both windows.
+	for _, window := range []string{"daily", "weekly"} {
+		status, payload = call(t, server, http.MethodGet, "/api/v1/admin/stats/trending-words?window="+window, token, nil)
+		if status != http.StatusOK {
+			t.Fatalf("trending-words (%s) failed: %d %s", window, status, payload)
+		}
+		var words struct {
+			Data struct {
+				Window  string `json:"window"`
+				Buckets []struct {
+					Top []struct {
+						Word  string `json:"word"`
+						Count int64  `json:"count"`
+					} `json:"top"`
+				} `json:"buckets"`
+				Overall []struct {
+					Word string `json:"word"`
+				} `json:"overall"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(payload, &words); err != nil {
+			t.Fatal(err)
+		}
+		expected := 7
+		if window == "weekly" {
+			expected = 8
+		}
+		if words.Data.Window != window || len(words.Data.Buckets) != expected {
+			t.Fatalf("trending-words (%s): unexpected window/buckets %s/%d", window, words.Data.Window, len(words.Data.Buckets))
+		}
+		// "sample" is a 6-letter content word, so the tokenizer keeps it — it must
+		// surface in the overall top terms (the aggregated form, not a raw query).
+		found := false
+		for _, term := range words.Data.Overall {
+			if term.Word == "sample" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("trending-words (%s) should contain the term \"sample\", got %s", window, payload)
+		}
 	}
 }
 

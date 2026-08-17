@@ -17,7 +17,7 @@ onMounted(load)
 </script>
 <template>
   <div>
-    <PageHeader eyebrow="Statistics" title="Top queries" description="The most-asked questions across the platform." />
+    <PageHeader eyebrow="Statistics" title="Top queries" description="The most-asked questions across the platform. Queries are masked to protect user privacy — word-level trends are on the Trending words page." />
     <section class="admin-card">
       <div v-if="loading" class="admin-loading"><LoadingSpinner /></div>
       <ul v-else-if="rows.length" class="rank-list rank-list--full">
