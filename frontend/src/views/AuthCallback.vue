@@ -59,7 +59,7 @@ onMounted(async () => {
 .auth-callback-spinner { width: 34px; height: 34px; animation: callback-spin 1s linear infinite; }
 .auth-callback-badge { width: 34px; height: 34px; animation: callback-pop .35s cubic-bezier(.22, 1.4, .36, 1) both; }
 .auth-callback-brand { display: flex; align-items: center; gap: 12px; }
-.auth-callback-brand .brand-mark { width: 40px; height: 40px; border-radius: 12px; font-size: .8rem; background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 55%, #8b6dff)); color: #fff; }
+.auth-callback-brand .brand-mark { width: 40px; height: 40px; border-radius: 12px; font-size: .8rem; background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 55%, #8b6dff)); color: var(--color-primary-contrast); }
 .auth-callback-brand div { display: grid; gap: 1px; text-align: left; }
 .auth-callback-brand strong { font-size: .94rem; letter-spacing: -.02em; }
 .auth-callback-brand span:not(.brand-mark) { color: var(--color-muted); font-size: .74rem; }

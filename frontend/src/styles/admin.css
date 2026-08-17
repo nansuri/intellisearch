@@ -1,38 +1,16 @@
 /* Admin control panel — theme-aware dashboard palette ---------------------- */
-/* Tokens are scoped to admin surfaces and follow html[data-theme]. */
+/* The admin shell deliberately inherits the GLOBAL design tokens (tokens.css)
+   so the control panel shares the main site's palette and design language.
+   Only the admin-specific extras (warning color, background glow tint) are
+   defined here; the glow is derived from the global primary color. */
 
-[data-theme="light"] .admin-shell {
-  --color-bg: #f3f6fc;
-  --color-surface: #ffffff;
-  --color-surface-subtle: #eef2f9;
-  --color-text: #0f172a;
-  --color-muted: #64748b;
-  --color-border: #dbe3f0;
-  --color-primary: #4f6ef7;
-  --color-primary-hover: #3b59e6;
-  --color-primary-contrast: #ffffff;
-  --color-focus: #93a8ff;
-  --color-danger: #dc2626;
+.admin-shell {
+  --color-bg-glow: radial-gradient(1200px 500px at 80% -10%, color-mix(in srgb, var(--color-primary) 9%, transparent), transparent 60%);
   --color-warning: #d97706;
-  --color-shadow: rgba(15, 23, 42, .08);
-  --color-bg-glow: radial-gradient(1200px 500px at 80% -10%, rgba(79, 110, 247, .1), transparent 60%);
 }
 
 [data-theme="dark"] .admin-shell {
-  --color-bg: #080d18;
-  --color-surface: #0f1830;
-  --color-surface-subtle: #1a2440;
-  --color-text: #edf2fb;
-  --color-muted: #94a3c0;
-  --color-border: #1f2c4a;
-  --color-primary: #6f8dff;
-  --color-primary-hover: #8aa4ff;
-  --color-primary-contrast: #0b1220;
-  --color-focus: #9db8ff;
-  --color-danger: #f56565;
   --color-warning: #fbbf24;
-  --color-shadow: rgba(0, 0, 0, .45);
-  --color-bg-glow: radial-gradient(1200px 500px at 80% -10%, rgba(111, 141, 255, .16), transparent 60%);
 }
 
 /* Shell & layout ----------------------------------------------------------- */
@@ -44,7 +22,7 @@
 .admin-sidebar-inner { display: flex; flex-direction: column; gap: 18px; padding: 24px 14px 30px; }
 .admin-sidebar-brand { display: inline-flex; align-items: center; justify-content: center; gap: 10px; margin: 0 auto 6px; padding: 8px 12px; border-radius: 12px; text-decoration: none; transition: background .15s ease; }
 .admin-sidebar-brand:hover { background: var(--color-surface-subtle); }
-.admin-sidebar-brand .brand-mark { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 45%, #8b6dff)); color: #fff; font-size: .78rem; }
+.admin-sidebar-brand .brand-mark { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 45%, #8b6dff)); color: var(--color-primary-contrast); font-size: .78rem; }
 .admin-sidebar-brand-name { display: grid; gap: 1px; text-align: left; }
 .admin-sidebar-brand-name strong { color: var(--color-text); font-size: .9rem; letter-spacing: -.02em; }
 .admin-sidebar-brand-name span { color: var(--color-muted); font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; }
@@ -139,11 +117,11 @@
 
 /* Buttons (admin override) -------------------------------------------------- */
 .admin-shell .base-button { border-radius: 10px; }
-.admin-shell .button-primary { background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 55%, #8b6dff)); color: #fff; box-shadow: 0 8px 22px color-mix(in srgb, var(--color-primary) 32%, transparent); }
+.admin-shell .button-primary { background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 55%, #8b6dff)); color: var(--color-primary-contrast); box-shadow: 0 8px 22px color-mix(in srgb, var(--color-primary) 32%, transparent); }
 .admin-shell .button-primary:hover { filter: brightness(1.06); }
 .admin-shell .button-secondary { border-color: var(--color-border); background: var(--color-surface); color: var(--color-text); }
 .admin-shell .button-secondary:hover { border-color: var(--color-primary); }
-.button-danger { background: var(--color-danger); color: #fff; }
+.button-danger { background: var(--color-danger); color: var(--color-primary-contrast); }
 .button-danger:hover { filter: brightness(1.08); }
 .base-button:disabled { opacity: .55; cursor: not-allowed; }
 
@@ -240,7 +218,7 @@
 
 /* Branding ------------------------------------------------------------------ */
 .identity-preview, .logo-preview { display: flex; align-items: center; gap: 14px; }
-.identity-preview .brand-mark, .logo-preview .brand-mark { width: 46px; height: 46px; border-radius: 12px; font-size: .92rem; background: linear-gradient(135deg, var(--color-primary), #8b6dff); color: #fff; }
+.identity-preview .brand-mark, .logo-preview .brand-mark { width: 46px; height: 46px; border-radius: 12px; font-size: .92rem; background: linear-gradient(135deg, var(--color-primary), #8b6dff); color: var(--color-primary-contrast); }
 .identity-preview div { display: grid; gap: 2px; }
 .identity-preview strong { font-size: .96rem; }
 .identity-preview span { color: var(--color-muted); font-size: .8rem; }
@@ -264,7 +242,7 @@
 .pagination { display: flex; align-items: center; gap: 8px; margin-top: 20px; }
 .page-dot { min-width: 34px; height: 34px; padding: 0 8px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--color-muted); font-size: .8rem; font-weight: 700; cursor: pointer; }
 .page-dot:hover { border-color: var(--color-border); color: var(--color-text); }
-.page-dot.active { background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 55%, #8b6dff)); color: #fff; box-shadow: 0 6px 18px color-mix(in srgb, var(--color-primary) 30%, transparent); }
+.page-dot.active { background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 55%, #8b6dff)); color: var(--color-primary-contrast); box-shadow: 0 6px 18px color-mix(in srgb, var(--color-primary) 30%, transparent); }
 .pagination-total { margin-left: 6px; color: var(--color-muted); font-size: .78rem; }
 .admin-loading { display: grid; place-items: center; padding: 48px 0; }
 .spinner { width: 28px; height: 28px; border: 3px solid var(--color-border); border-top-color: var(--color-primary); border-radius: 50%; animation: spin .7s linear infinite; }

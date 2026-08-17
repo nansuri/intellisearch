@@ -23,8 +23,10 @@ function switchWindow(next: 'daily' | 'weekly') {
   void load()
 }
 
-// Chart: top 5 overall terms, one bar per time bucket.
-const CHART_COLORS = ['#4f6ef7', '#8b6dff', '#0ea5e9', '#f59e0b', '#34d399']
+// Chart: top 5 overall terms, one bar per time bucket. The first color is the
+// global primary token so the chart follows the main site palette in both
+// themes; the rest are the app's accent set.
+const CHART_COLORS = ['var(--color-primary)', '#8b6dff', '#0ea5e9', '#f59e0b', '#34d399']
 const topWords = () => data.value?.overall.slice(0, 5) || []
 const chartMax = () => Math.max(1, ...data.value?.buckets.flatMap((b) => b.top.map((t) => t.count)) || [1])
 const countFor = (bucketLabel: string, word: string) => data.value?.buckets.find((b) => b.label === bucketLabel)?.top.find((t) => t.word === word)?.count || 0
