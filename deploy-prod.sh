@@ -33,6 +33,18 @@ if [[ -z "${ENCRYPTION_KEY:-}" || "$ENCRYPTION_KEY" == "change-me-32-byte-key-fo
   echo "ERROR: ENCRYPTION_KEY must be replaced with a strong production value." >&2
   exit 1
 fi
+if [[ -n "${GOOGLE_CLIENT_ID:-}" ]]; then
+  if [[ -z "${FRONTEND_ORIGIN:-}" || "$FRONTEND_ORIGIN" == "http://localhost:5173" ]]; then
+    echo "ERROR: FRONTEND_ORIGIN must be the public origin (e.g. https://www.justnansuri.com)." >&2
+    echo "       Google SSO redirects the browser there after sign-in; the localhost default breaks it in production." >&2
+    exit 1
+  fi
+  if [[ -z "${GOOGLE_REDIRECT_URL:-}" || "$GOOGLE_REDIRECT_URL" == *localhost* ]]; then
+    echo "ERROR: GOOGLE_REDIRECT_URL must match the Authorized redirect URI in Google Cloud Console" >&2
+    echo "       (e.g. https://www.justnansuri.com/api/v1/auth/google/callback)." >&2
+    exit 1
+  fi
+fi
 
 COMPOSE_FILE="$ROOT/docker-compose.prod.yml"
 echo "-> validating production compose configuration"
