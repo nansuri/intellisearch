@@ -1,0 +1,2 @@
+{"name":"intellisearch-crawler","private":true,"type":"module","scripts":{"start":"node src/index.js"},"dependencies":{"express":"^4.19.2","playwright":"1.46.0"}}
+
