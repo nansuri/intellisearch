@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="mockup.css" />
+  <title>Intellisearch — Account settings</title>
+</head>
+<body>
+  <main class="page-shell">
+    <div class="header-bar header-bar--sticky">
+      <header class="app-header">
+        <a class="brand-link" href="#">
+          <span class="brand-mark">IN</span>
+          <span class="brand-copy"><span class="site-name">Intellisearch</span><span class="brand-caption">Research, distilled</span></span>
+        </a>
+        <div class="header-actions"><span class="avatar">JD</span></div>
+      </header>
+    </div>
+
+    <section class="account-content">
+      <h1 class="page-title">Account settings</h1>
+
+      <div class="tabs">
+        <button class="active" type="button">Profile</button>
+        <button type="button">AI Limit &amp; Usage</button>
+        <button type="button">Session</button>
+      </div>
+
+      <div class="profile-card">
+        <div class="profile-top">
+          <span class="profile-avatar">JD</span>
+          <div>
+            <div class="section-label">Profile photo</div>
+            <p style="margin:4px 0 0; color:var(--color-muted); font-size:.84rem;">JPG, PNG, GIF or WebP — up to 2 MB.</p>
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-field">
+            <label class="form-label">Name</label>
+            <input class="text-input" value="Jane Doe" />
+          </div>
+          <div class="form-field">
+            <label class="form-label">Email</label>
+            <input class="text-input" value="jane@example.com" />
+          </div>
+        </div>
+
+        <div class="form-field" style="margin-top:24px;">
+          <label class="form-label">Daily AI usage</label>
+          <span class="usage-track"><span class="usage-fill" style="width:30%;"></span></span>
+          <span class="usage-copy">3 of 10 questions used today</span>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:26px;">
+          <button class="base-button button-secondary" type="button">Cancel</button>
+          <button class="base-button button-primary" type="button">Save changes</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

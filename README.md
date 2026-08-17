@@ -32,6 +32,24 @@ A generic, open-source AI main page — as simple as a Google dashboard. Users t
 - **Account settings** — profile, avatar upload, AI usage & daily limit, logout
 - **Owner control panel** — user management, usage statistics, AI provider + concurrency/queue settings, branding — all changeable without redeploying
 
+## UI Preview
+
+Design mockups (light & dark themes, responsive from ≥360px):
+
+| Main page (light) | Main page (dark) |
+| --- | --- |
+| ![Main page, light theme](docs/screenshots/main-light.png) | ![Main page, dark theme](docs/screenshots/main-dark.png) |
+
+| Result page — cited answer + sources | Account settings |
+| --- | --- |
+| ![Result page with cited answer and sources](docs/screenshots/result.png) | ![Account settings with tabs](docs/screenshots/account.png) |
+
+| Owner Control Panel — user management |
+| --- |
+| ![Owner control panel with sidebar navigation](docs/screenshots/admin.png) |
+
+> Mockups are static previews built from the app's design tokens under `docs/ui-mockups/`; the live UI is served by the frontend dev server (`npm run dev`).
+
 ## Getting Started (local)
 
 Requirements: Podman or Docker for Redis, SearXNG, and the Playwright crawler during host-run development; Docker Compose for the full container stack.

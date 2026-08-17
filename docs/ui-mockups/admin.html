@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="mockup.css" />
+  <title>Intellisearch — Owner control panel</title>
+</head>
+<body>
+  <div class="admin-shell">
+    <aside class="admin-sidebar">
+      <div class="admin-sidebar-inner">
+        <a class="admin-sidebar-brand" href="#">
+          <span class="brand-mark">IN</span>
+          <span class="admin-sidebar-brand-name"><strong>Intellisearch</strong><span>Super Owner</span></span>
+        </a>
+        <nav class="admin-nav" aria-label="Control panel">
+          <div class="admin-nav-group">
+            <button class="admin-nav-group-title" type="button">Dashboard <svg class="admin-chevron" viewBox="0 0 24 24"><path d="M8.5 10l3.5 3.5L15.5 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
+          </div>
+          <div class="admin-nav-group">
+            <button class="admin-nav-group-title" type="button">Users <svg class="admin-chevron" viewBox="0 0 24 24"><path d="M8.5 10l3.5 3.5L15.5 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
+            <div class="admin-nav-children">
+              <a class="admin-nav-link active" href="#">All users</a>
+              <a class="admin-nav-link" href="#">Suspended</a>
+            </div>
+          </div>
+          <div class="admin-nav-group">
+            <button class="admin-nav-group-title" type="button">Statistics <svg class="admin-chevron" viewBox="0 0 24 24"><path d="M8.5 10l3.5 3.5L15.5 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
+            <div class="admin-nav-children">
+              <a class="admin-nav-link" href="#">Overview</a>
+              <a class="admin-nav-link" href="#">Top queries</a>
+              <a class="admin-nav-link" href="#">Per-user usage</a>
+              <a class="admin-nav-link" href="#">AI service</a>
+            </div>
+          </div>
+          <div class="admin-nav-group">
+            <button class="admin-nav-group-title" type="button">AI providers <svg class="admin-chevron" viewBox="0 0 24 24"><path d="M8.5 10l3.5 3.5L15.5 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
+            <div class="admin-nav-children">
+              <a class="admin-nav-link" href="#">Providers</a>
+              <a class="admin-nav-link" href="#">Queue &amp; limits</a>
+            </div>
+          </div>
+          <div class="admin-nav-group">
+            <button class="admin-nav-group-title" type="button">Branding <svg class="admin-chevron" viewBox="0 0 24 24"><path d="M8.5 10l3.5 3.5L15.5 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
+            <div class="admin-nav-children">
+              <a class="admin-nav-link" href="#">Identity</a>
+              <a class="admin-nav-link" href="#">Logo</a>
+            </div>
+          </div>
+        </nav>
+      </div>
+    </aside>
+
+    <div class="admin-main">
+      <header class="admin-header">
+        <div class="admin-header-copy"><strong>Users</strong><span>Intellisearch</span></div>
+        <div class="admin-header-actions">
+          <a class="admin-site-link" href="#">View site ↗</a>
+          <span class="status-pill">Super Owner</span>
+          <span class="avatar-initials">JD</span>
+          <button class="base-button button-secondary" type="button">Sign out</button>
+        </div>
+      </header>
+
+      <div class="admin-content">
+        <div class="admin-page-head">
+          <div>
+            <h1>Users</h1>
+            <p>Manage accounts, roles, and daily AI quotas for everyone on the platform.</p>
+          </div>
+          <div class="admin-page-head-actions">
+            <button class="base-button button-primary" type="button">+ Add user</button>
+          </div>
+        </div>
+
+        <div class="admin-card">
+          <div class="user-toolbar">
+            <input class="text-input user-search" placeholder="Search by name or email…" />
+            <span class="user-total">Showing 1–5 of 5</span>
+          </div>
+          <div class="user-table-wrap">
+            <table class="user-table">
+              <thead>
+                <tr><th>User</th><th>Role</th><th>Status</th><th>Daily quota</th><th>Last login</th><th class="cell-actions">Actions</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="cell-user"><span class="avatar-initials">JD</span><span><strong>Jane Doe</strong><small>jane@example.com</small></span></span></td>
+                  <td><span class="cell-muted">General user</span></td>
+                  <td><span class="status-badge status-badge--success">Active</span></td>
+                  <td><span class="cell-muted">10 / day</span></td>
+                  <td><span class="cell-muted">2h ago</span></td>
+                  <td class="cell-actions"><button class="table-action" type="button">Edit</button><button class="table-action table-action--danger" type="button">Delete</button></td>
+                </tr>
+                <tr>
+                  <td><span class="cell-user"><span class="avatar-initials">MO</span><span><strong>Mark Olson</strong><small>mark@example.com</small></span></span></td>
+                  <td><span class="cell-muted">General user</span></td>
+                  <td><span class="status-badge status-badge--success">Active</span></td>
+                  <td><span class="cell-muted">10 / day</span></td>
+                  <td><span class="cell-muted">Yesterday</span></td>
+                  <td class="cell-actions"><button class="table-action" type="button">Edit</button><button class="table-action table-action--danger" type="button">Delete</button></td>
+                </tr>
+                <tr>
+                  <td><span class="cell-user"><span class="avatar-initials">AR</span><span><strong>Ava Reyes</strong><small>ava@example.com</small></span></span></td>
+                  <td><span class="cell-muted">General user</span></td>
+                  <td><span class="status-badge status-badge--success">Active</span></td>
+                  <td><span class="cell-muted">0 (unlimited)</span></td>
+                  <td><span class="cell-muted">3d ago</span></td>
+                  <td class="cell-actions"><button class="table-action" type="button">Edit</button><button class="table-action table-action--danger" type="button">Delete</button></td>
+                </tr>
+                <tr>
+                  <td><span class="cell-user"><span class="avatar-initials">OK</span><span><strong>Omar Khan</strong><small>omar@example.com</small></span></span></td>
+                  <td><span class="cell-muted">General user</span></td>
+                  <td><span class="status-badge">Suspended</span></td>
+                  <td><span class="cell-muted">10 / day</span></td>
+                  <td><span class="cell-muted">1w ago</span></td>
+                  <td class="cell-actions"><button class="table-action" type="button">Edit</button><button class="table-action table-action--danger" type="button">Delete</button></td>
+                </tr>
+                <tr>
+                  <td><span class="cell-user"><span class="avatar-initials">SW</span><span><strong>Sofia Wong</strong><small>sofia@example.com</small></span></span></td>
+                  <td><span class="cell-muted">General user</span></td>
+                  <td><span class="status-badge status-badge--success">Active</span></td>
+                  <td><span class="cell-muted">25 / day</span></td>
+                  <td><span class="cell-muted">2w ago</span></td>
+                  <td class="cell-actions"><button class="table-action" type="button">Edit</button><button class="table-action table-action--danger" type="button">Delete</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <button class="page-dot active" type="button">1</button>
+            <button class="page-dot" type="button">2</button>
+            <button class="page-dot" type="button">3</button>
+            <span class="pagination-total">Page 1 of 3</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
