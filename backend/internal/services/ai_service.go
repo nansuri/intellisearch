@@ -19,6 +19,7 @@ var (
 	ErrQueueFull        = errors.New("ai queue full")
 	ErrQuotaExceeded    = errors.New("daily question quota exceeded")
 	ErrRateLimited      = errors.New("rate limit exceeded")
+	ErrAnonymousLimit   = errors.New("anonymous guest AI allowance used")
 	ErrSessionNotFound  = errors.New("session not found")
 	ErrSessionForbidden = errors.New("session access denied")
 )
@@ -44,12 +45,15 @@ type AskInput struct {
 	Mode      string     // ModeEnhanced (default) or ModeSearch
 }
 
-// AskResult is the envelope payload returned to the client.
+// AskResult is the envelope payload returned to the client. VisitorID is set
+// only for anonymous callers on their first (allowed) ask, so the frontend can
+// persist the issued guest token.
 type AskResult struct {
 	SessionID uuid.UUID   `json:"sessionId"`
 	MessageID uuid.UUID   `json:"messageId"`
 	Answer    string      `json:"answer"`
 	Sources   []SourceItem `json:"sources"`
+	VisitorID *uuid.UUID  `json:"visitorId,omitempty"`
 }
 
 // AIService runs the full ask pipeline: persist session/messages/usage logs,
@@ -342,6 +346,8 @@ func CodeForError(err error) string {
 		return "AISY02002"
 	case errors.Is(err, ErrQuotaExceeded):
 		return "AISY02003"
+	case errors.Is(err, ErrAnonymousLimit):
+		return "AISY02004"
 	case errors.Is(err, ErrURLInvalid):
 		return "AISY03003"
 	case errors.Is(err, ErrURLBlocked):
@@ -371,6 +377,8 @@ func SanitizedErrorMessage(err error) string {
 		return "You're asking too quickly — slow down and try again in a moment."
 	case errors.Is(err, ErrQuotaExceeded):
 		return "You've reached today's question limit — try again tomorrow."
+	case errors.Is(err, ErrAnonymousLimit):
+		return "Guests get one AI search — sign in to continue."
 	case errors.Is(err, ErrURLInvalid):
 		return "That URL is not valid."
 	case errors.Is(err, ErrURLBlocked):

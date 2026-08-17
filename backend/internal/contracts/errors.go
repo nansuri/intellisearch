@@ -60,6 +60,10 @@ const AISY02002 = "AISY02002"
 // AISY02003 indicates that the daily question quota was exceeded.
 const AISY02003 = "AISY02003"
 
+// AISY02004 indicates that an anonymous guest already used their single AI
+// search allowance and must sign in to continue.
+const AISY02004 = "AISY02004"
+
 // AISY03003 indicates an invalid URL.
 const AISY03003 = "AISY03003"
 

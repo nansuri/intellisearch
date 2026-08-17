@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"sync"
@@ -11,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 
 	"intellisearch/internal/contracts"
 	"intellisearch/internal/middleware"
@@ -28,11 +30,17 @@ type aiRunner interface {
 // AIHandler is the single entry point for all AI work. It owns a worker pool
 // and a bounded queue whose knobs come from ai_queue_config (reloaded with a
 // short TTL so Owner Control Panel changes apply without redeploying).
+// visitorCookie is the httpOnly guest token: it survives localStorage clears,
+// so a visitor who deletes the frontend-stored token is still recognized and
+// their single AI allowance stays consumed.
+const visitorCookie = "visitor_id"
+
 type AIHandler struct {
 	service   aiRunner
 	queueCfg  *repositories.QueueConfigRepository
 	users     *repositories.UserRepository
 	usageLogs *repositories.UsageLogRepository
+	anonymous *repositories.AnonymousUsageRepository
 	limiter   services.Limiter
 	auth      *services.AuthService
 
@@ -61,8 +69,8 @@ type jobResult struct {
 	err    error
 }
 
-func NewAIHandler(service aiRunner, queueCfg *repositories.QueueConfigRepository, users *repositories.UserRepository, usageLogs *repositories.UsageLogRepository, limiter services.Limiter, auth *services.AuthService) *AIHandler {
-	handler := &AIHandler{service: service, queueCfg: queueCfg, users: users, usageLogs: usageLogs, limiter: limiter, auth: auth, stop: make(chan struct{})}
+func NewAIHandler(service aiRunner, queueCfg *repositories.QueueConfigRepository, users *repositories.UserRepository, usageLogs *repositories.UsageLogRepository, anonymous *repositories.AnonymousUsageRepository, limiter services.Limiter, auth *services.AuthService) *AIHandler {
+	handler := &AIHandler{service: service, queueCfg: queueCfg, users: users, usageLogs: usageLogs, anonymous: anonymous, limiter: limiter, auth: auth, stop: make(chan struct{})}
 	// The seed guarantees sane defaults; if the first read fails, currentConfig
 	// returns a fallback so the pool still starts.
 	config, _ := handler.currentConfig()
@@ -178,8 +186,21 @@ func (h *AIHandler) Ask(c *gin.Context) {
 	if request.Mode == services.ModeSearch {
 		mode = services.ModeSearch
 	}
+	// Anonymous guests get exactly one AI search (mode=search is free — it runs
+	// no LLM). The gate issues the visitor token on the first ask and rejects
+	// repeat use, backed by a per-IP claim so clearing cookies/storage cannot
+	// reset the allowance.
+	var visitorID *uuid.UUID
+	if userID == nil && mode == services.ModeEnhanced {
+		visitorID, err = h.gateAnonymous(c)
+		if err != nil {
+			h.respond(c, services.AskResult{}, err)
+			return
+		}
+	}
 	config, _ := h.currentConfig()
 	result, err := h.enqueue(c.Request.Context(), services.AskInput{Query: request.Query, SessionID: request.SessionID, UserID: userID, IP: c.ClientIP(), Location: location, Mode: mode}, config.PerUserRateLimit, time.Minute)
+	h.settleAnonymousClaim(visitorID, err, &result)
 	h.respond(c, result, err)
 }
 
@@ -196,8 +217,18 @@ func (h *AIHandler) AskURL(c *gin.Context) {
 		middleware.JSON(c, http.StatusUnauthorized, contracts.Fail(contracts.AUTH01002, "Your session is invalid or has expired."))
 		return
 	}
-	// URL submissions are rate-limited much more strictly (5 per hour).
+	// URL submissions are rate-limited much more strictly (5 per hour), and for
+	// anonymous guests they also consume the single AI-usage allowance.
+	var visitorID *uuid.UUID
+	if userID == nil {
+		visitorID, err = h.gateAnonymous(c)
+		if err != nil {
+			h.respond(c, services.AskResult{}, err)
+			return
+		}
+	}
 	result, err := h.enqueue(c.Request.Context(), services.AskInput{Query: "Summarize this page", URL: request.URL, UserID: userID, IP: c.ClientIP()}, 5, time.Hour)
+	h.settleAnonymousClaim(visitorID, err, &result)
 	h.respond(c, result, err)
 }
 
@@ -242,6 +273,75 @@ func (h *AIHandler) enqueue(ctx context.Context, input services.AskInput, limitM
 	case <-ctx.Done():
 		return services.AskResult{}, ctx.Err()
 	}
+}
+
+// settleAnonymousClaim finalizes a gated ask: on success the issued visitor
+// token is attached to the response so the frontend can persist it; on failure
+// the claim is released so the guest's single allowance is only consumed by a
+// successful AI usage (a provider outage must not burn it).
+func (h *AIHandler) settleAnonymousClaim(visitorID *uuid.UUID, err error, result *services.AskResult) {
+	if visitorID == nil || h.anonymous == nil {
+		return
+	}
+	if err != nil {
+		if releaseErr := h.anonymous.Release(*visitorID); releaseErr != nil {
+			logrus.WithError(releaseErr).WithField("visitorID", *visitorID).Error("anonymous usage release failed")
+		}
+		return
+	}
+	result.VisitorID = visitorID
+}
+
+// gateAnonymous enforces the one-AI-search allowance for anonymous callers and
+// returns the visitor token to attach to the successful response. It is
+// DB-backed (independent of Redis), so it stays effective even when the rate
+// limiter is degraded. Identity is layered:
+//  1. the httpOnly visitor cookie / X-Visitor-ID header — repeat use by the
+//     same browser is rejected even after localStorage is cleared;
+//  2. a unique per-IP claim — clearing cookies AND storage still cannot reuse
+//     an IP that already used its allowance;
+//  3. trusted-proxy configuration (see config) prevents forging X-Forwarded-For
+//     to fake a fresh IP.
+func (h *AIHandler) gateAnonymous(c *gin.Context) (*uuid.UUID, error) {
+	if h.anonymous == nil {
+		return nil, nil // repo not wired (tests); feature disabled
+	}
+	raw := c.GetHeader("X-Visitor-ID")
+	if raw == "" {
+		raw, _ = c.Cookie(visitorCookie)
+	}
+	visitorID := uuid.Nil
+	if parsed, err := uuid.Parse(raw); err == nil {
+		visitorID = parsed
+	}
+	if visitorID == uuid.Nil {
+		visitorID = uuid.New()
+	}
+	if _, err := h.anonymous.ByVisitorID(visitorID); err == nil {
+		// This visitor token already used its single allowance.
+		return nil, services.ErrAnonymousLimit
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		logrus.WithError(err).WithField("visitorID", visitorID).Error("anonymous usage lookup failed")
+		return nil, err
+	}
+	ip := c.ClientIP()
+	if ip == "" {
+		ip = "unknown"
+	}
+	winner, err := h.anonymous.Claim(visitorID, repositories.HashIP(ip))
+	if err != nil {
+		logrus.WithError(err).WithField("ip", repositories.HashIP(ip)).Error("anonymous usage claim failed")
+		return nil, err
+	}
+	if winner.VisitorID != visitorID {
+		// The IP was already claimed by another visitor.
+		return nil, services.ErrAnonymousLimit
+	}
+	// Issue the identity cookie (httpOnly, 1 year) so the allowance sticks even
+	// if the frontend-stored token is cleared.
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(visitorCookie, visitorID.String(), 31536000, "/", "", false, true)
+	return &visitorID, nil
 }
 
 func (h *AIHandler) checkDailyQuota(ctx context.Context, userID uuid.UUID) error {
@@ -293,7 +393,7 @@ func (h *AIHandler) respond(c *gin.Context, result services.AskResult, err error
 func (h *AIHandler) errorResponse(err error) (string, int) {
 	code := services.CodeForError(err)
 	switch code {
-	case "AISY02001", "AISY02002", "AISY02003":
+	case "AISY02001", "AISY02002", "AISY02003", "AISY02004":
 		return code, http.StatusTooManyRequests
 	case "AISY01004", "AISY03003":
 		return code, http.StatusBadRequest

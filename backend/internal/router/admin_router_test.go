@@ -42,7 +42,7 @@ func adminTestMux(t *testing.T) (*httptest.Server, *gorm.DB) {
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&entities.User{}, &entities.SiteSettings{}, &entities.AIQueueConfig{}, &entities.AIProvider{}, &entities.ChatSession{}, &entities.Message{}, &entities.SearchResult{}, &entities.UsageLog{}, &entities.CrawlJob{}, &entities.SearchHistory{}); err != nil {
+	if err := db.AutoMigrate(&entities.User{}, &entities.SiteSettings{}, &entities.AIQueueConfig{}, &entities.AIProvider{}, &entities.ChatSession{}, &entities.Message{}, &entities.SearchResult{}, &entities.UsageLog{}, &entities.CrawlJob{}, &entities.SearchHistory{}, &entities.AnonymousUsage{}); err != nil {
 		t.Fatal(err)
 	}
 	seed := func(user *entities.User, password string) {
@@ -70,8 +70,8 @@ func adminTestMux(t *testing.T) (*httptest.Server, *gorm.DB) {
 	historyService := services.NewSearchHistoryService(repositories.NewSearchHistoryRepository(db), repositories.NewMessageRepository(db), services.NewLLMService(repositories.NewProviderRepository(db), cfg.JWTSecret), repositories.NewQueueConfigRepository(db))
 	adminService := services.NewAdminService(repositories.NewProviderRepository(db), repositories.NewQueueConfigRepository(db), repositories.NewSiteRepository(db), cfg.JWTSecret, t.TempDir())
 	statsService := services.NewStatsService(repositories.NewUsageLogRepository(db), repositories.NewUserRepository(db), repositories.NewProviderRepository(db), nil)
-	aiHandler := handlers.NewAIHandler(fakeRunner{}, repositories.NewQueueConfigRepository(db), repositories.NewUserRepository(db), repositories.NewUsageLogRepository(db), allowingLimiter{}, authService)
-	defer aiHandler.Stop()
+	aiHandler := handlers.NewAIHandler(fakeRunner{}, repositories.NewQueueConfigRepository(db), repositories.NewUserRepository(db), repositories.NewUsageLogRepository(db), repositories.NewAnonymousUsageRepository(db), allowingLimiter{}, authService)
+	t.Cleanup(aiHandler.Stop)
 	adminHandler := handlers.NewAdminHandler(userService, adminService, statsService, services.NewOllamaService())
 	siteService := services.NewSiteService(repositories.NewSiteRepository(db))
 	mux := New("*", t.TempDir(), siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService, historyService), nil, aiHandler, adminHandler, authService)
@@ -180,6 +180,34 @@ func TestAdminSearchAndDeleteUser(t *testing.T) {
 	status, payload = call(t, server, http.MethodGet, "/api/v1/admin/users?q=new", token, nil)
 	if status != http.StatusOK || bytes.Contains(payload, []byte("new@example.com")) {
 		t.Fatalf("deleted user still present: %d %s", status, payload)
+	}
+}
+
+func TestAskAnonymousLimitEndToEnd(t *testing.T) {
+	server, _ := adminTestMux(t)
+	// First anonymous ask from this IP: allowed and issues a visitor token.
+	status, payload := call(t, server, http.MethodPost, "/api/v1/ask", "", []byte(`{"query":"first question"}`))
+	if status != http.StatusOK {
+		t.Fatalf("expected first anonymous ask to succeed, got %d: %s", status, payload)
+	}
+	var envelope struct {
+		Data struct {
+			VisitorID string `json:"visitorId"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err != nil || envelope.Data.VisitorID == "" {
+		t.Fatalf("expected a visitorId to be issued, got %s (err=%v)", payload, err)
+	}
+	// Second anonymous ask (token cleared): blocked by the per-IP claim.
+	status, payload = call(t, server, http.MethodPost, "/api/v1/ask", "", []byte(`{"query":"second question"}`))
+	if status != http.StatusTooManyRequests || !bytes.Contains(payload, []byte("AISY02004")) {
+		t.Fatalf("expected 429 AISY02004 for reused IP, got %d: %s", status, payload)
+	}
+	// A signed-in user from the same IP is exempt from the anonymous limit.
+	janeToken := loginToken(t, server, "jane@example.com", "jane-pass")
+	status, payload = call(t, server, http.MethodPost, "/api/v1/ask", janeToken, []byte(`{"query":"signed in question"}`))
+	if status != http.StatusOK {
+		t.Fatalf("signed-in users must be exempt from the anonymous limit, got %d: %s", status, payload)
 	}
 }
 

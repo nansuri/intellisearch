@@ -55,7 +55,7 @@ func main() {
 	llmService := services.NewLLMService(providerRepository, cfg.EncryptionKey)
 	geoService := services.NewGeoService(cfg.NominatimBaseURL, "Intellisearch/1.0", cfg.NominatimTimeoutMS)
 	aiService := services.NewAIService(sessionRepository, messageRepository, usageLogRepository, providerRepository, userRepository, searchHistoryRepository, searchService, crawlService, llmService, geoService, cfg.CrawlTopN)
-	aiHandler := handlers.NewAIHandler(aiService, queueConfigRepository, userRepository, usageLogRepository, limiter, authService)
+	aiHandler := handlers.NewAIHandler(aiService, queueConfigRepository, userRepository, usageLogRepository, repositories.NewAnonymousUsageRepository(db), limiter, authService)
 	adminService := services.NewAdminService(providerRepository, queueConfigRepository, repositories.NewSiteRepository(db), cfg.EncryptionKey, cfg.UploadsDir)
 	statsService := services.NewStatsService(usageLogRepository, userRepository, providerRepository, aiHandler)
 	adminHandler := handlers.NewAdminHandler(userService, adminService, statsService, services.NewOllamaService())
@@ -63,6 +63,12 @@ func main() {
 	historyService := services.NewSearchHistoryService(searchHistoryRepository, messageRepository, llmService, queueConfigRepository)
 
 	api := router.New(cfg.CORSOrigins, cfg.UploadsDir, siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService, historyService), sessionHandler, aiHandler, adminHandler, authService)
+	// Only the configured proxies may supply X-Forwarded-For; everything else is
+	// ignored so clients cannot spoof the client IP used for the anonymous
+	// per-IP AI allowance and rate limiting.
+	if err := api.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+		logrus.WithError(err).WithField("trustedProxies", cfg.TrustedProxies).Error("invalid trusted proxy list; ignoring")
+	}
 	if err := api.Run(fmt.Sprintf(":%s", cfg.Port)); err != nil {
 		logrus.WithError(err).Error("API stopped")
 		os.Exit(1)

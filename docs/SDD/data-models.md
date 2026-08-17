@@ -111,6 +111,16 @@
 
 > `usage_logs` powers the AI statistics panel (success/failure rate, error list, latency percentiles).
 
+### anonymous_usage
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | bigserial (PK) | |
+| visitor_id | UUID (unique) | server-issued guest token (also set as an httpOnly cookie) |
+| ip_hash | varchar(64) (unique) | SHA-256 of the proxy-verified client IP — raw IPs never stored |
+| created_at / updated_at | timestamptz | |
+
+> One row claims the single **anonymous AI-usage allowance** for a visitor token **and** an IP (both unique). A row's existence means that visitor/IP already used its one guest AI search — so clearing cookies or localStorage cannot reset the count, and only the proxy-verified IP (see `TRUSTED_PROXIES`) is hashed. Signed-in users are exempt; `mode=search` asks run no LLM and don't consume the allowance. Deliberately DB-backed so the limit survives Redis downtime. Rejection → `AISY02004` (429).
+
 ### crawl_jobs
 | Field | Type | Notes |
 | --- | --- | --- |

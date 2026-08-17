@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -20,6 +21,7 @@ type Config struct {
 	JWTTTLHours                                                               int
 	UploadsDir                                                                string
 	GoogleClientID, GoogleClientSecret, GoogleRedirectURL, FrontendOrigin      string
+	TrustedProxies                                                            []string
 }
 
 func Load() Config {
@@ -45,7 +47,26 @@ func Load() Config {
 		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		GoogleRedirectURL:  env("GOOGLE_REDIRECT_URL", "http://localhost:5173/api/v1/auth/google/callback"),
 		FrontendOrigin:     env("FRONTEND_ORIGIN", "http://localhost:5173"),
+		// Proxies whose X-Forwarded-For is trusted (dev Vite proxy, Docker
+		// nginx, LAN). Only these may supply the client IP used for the
+		// anonymous per-IP allowance — external clients cannot spoof it.
+		TrustedProxies: splitList(os.Getenv("TRUSTED_PROXIES"), "127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"),
 	}
+}
+
+// splitList splits a comma-separated env value into a trimmed non-empty list.
+func splitList(raw, fallback string) []string {
+	if raw == "" {
+		raw = fallback
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
 
 func envInt(key string, fallback int) int {

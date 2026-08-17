@@ -7,6 +7,7 @@ export const FRIENDLY_ERRORS: Record<string, string> = {
   AISY02001: "We're busy right now — try again in a moment.",
   AISY02002: "You're asking too quickly — slow down and try again.",
   AISY02003: "You've reached today's question limit — try again tomorrow.",
+  AISY02004: 'Guests get one AI search — sign in to continue.',
   AUTH01001: 'Invalid email or password.',
   AUTH01002: 'Your session is invalid or has expired. Please sign in again.',
   AUTH01004: 'Enter your name, a valid email, and a password of at least 8 characters.',
@@ -53,7 +54,24 @@ export type SiteSettings = { siteName: string; logoUrl: string | null; faviconUr
 export type Source = { position: number; title: string; url: string; domain: string; snippet: string }
 export type GeoLocation = { latitude: number; longitude: number; accuracy?: number }
 export type AskMode = 'enhanced' | 'search'
-export type AskResult = { sessionId: string; messageId: string; answer: string; sources: Source[] }
+export type AskResult = { sessionId: string; messageId: string; answer: string; sources: Source[]; visitorId?: string }
+
+// The anonymous guest token: issued by the backend on the first anonymous AI
+// ask (also mirrored in an httpOnly cookie). It ties a device to its single
+// guest search allowance; the server additionally enforces a per-IP claim, so
+// clearing this cannot reset the allowance from the same network.
+const VISITOR_KEY = 'visitorId'
+export function getVisitorId(): string | null {
+  return localStorage.getItem(VISITOR_KEY)
+}
+function visitorHeaders(): Record<string, string> {
+  if (localStorage.getItem('token')) return {}
+  const visitor = getVisitorId()
+  return visitor ? { 'X-Visitor-ID': visitor } : {}
+}
+function rememberVisitorId(result: AskResult | undefined) {
+  if (result?.visitorId) localStorage.setItem(VISITOR_KEY, result.visitorId)
+}
 export type SessionMessage = { id: string; role: 'system' | 'user' | 'assistant'; content: string; status: string; createdAt: string; sources?: Source[] }
 export type ChatSession = { sessionId: string; title: string; createdAt: string; messages: SessionMessage[] }
 
@@ -79,13 +97,19 @@ export type Trends = { daily: TrendPoint[]; weekly: TrendPoint[] }
 
 // Public & ask
 export const getSite = () => request<SiteSettings>('/site')
-export const ask = (query: string, sessionId?: string, location?: GeoLocation, mode: AskMode = 'enhanced') => {
+export const ask = async (query: string, sessionId?: string, location?: GeoLocation, mode: AskMode = 'enhanced') => {
   const body: { query: string; sessionId?: string; location?: GeoLocation; mode?: AskMode } = { query, mode }
   if (sessionId) body.sessionId = sessionId
   if (location) body.location = location
-  return request<AskResult>('/ask', { method: 'POST', body: JSON.stringify(body) })
+  const result = await request<AskResult>('/ask', { method: 'POST', headers: visitorHeaders(), body: JSON.stringify(body) })
+  rememberVisitorId(result)
+  return result
 }
-export const askUrl = (url: string) => request<AskResult>('/ask/url', { method: 'POST', body: JSON.stringify({ url }) })
+export const askUrl = async (url: string) => {
+  const result = await request<AskResult>('/ask/url', { method: 'POST', headers: visitorHeaders(), body: JSON.stringify({ url }) })
+  rememberVisitorId(result)
+  return result
+}
 export const getSession = (id: string) => request<ChatSession>(`/sessions/${id}`)
 
 // Auth & account

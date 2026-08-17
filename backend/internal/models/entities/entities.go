@@ -128,6 +128,20 @@ type SearchHistory struct {
 	CreatedAt time.Time  `gorm:"index:idx_search_history_user,priority:2" json:"createdAt"`
 }
 
+// AnonymousUsage is the fraud backstop for the anonymous guest limit: each
+// row claims the single AI-usage allowance for one visitor token AND one IP
+// (both unique). A row's existence means that visitor/IP has already used its
+// one guest AI search, so clearing cookies or local storage cannot reset the
+// count — only changing IP would, and the IP hash is derived from the
+// proxy-verified client address.
+type AnonymousUsage struct {
+	ID        uint64    `gorm:"primaryKey" json:"id"`
+	VisitorID uuid.UUID `gorm:"type:uuid;uniqueIndex" json:"visitorId"`
+	IPHash    string    `gorm:"type:varchar(64);uniqueIndex" json:"-"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
 type CrawlJob struct {
 	ID         uuid.UUID  `gorm:"type:uuid;primaryKey" json:"id"`
 	UserID     *uuid.UUID `gorm:"type:uuid;index" json:"userId,omitempty"`

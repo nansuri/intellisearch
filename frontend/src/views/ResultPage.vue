@@ -9,7 +9,7 @@ import CollapsibleAnswer from '../components/CollapsibleAnswer.vue'
 import FollowUpBlock, { type FollowUpEntry } from '../components/FollowUpBlock.vue'
 import { useSiteStore } from '../stores/site'
 import SourceCard from '../components/SourceCard.vue'
-import { ask, askUrl, getSession, type AskMode, type Source } from '../services/api'
+import { ask, askUrl, getSession, ApiError, type AskMode, type Source } from '../services/api'
 import { settleAskGhost } from '../services/motion'
 import { resolveLocationForQuery } from '../composables/useDeviceLocation'
 import { needsLocationContext } from '../utils/locationIntent'
@@ -28,6 +28,7 @@ const mode = ref<AskMode>(route.query.mode === 'search' ? 'search' : 'enhanced')
 const loading = ref(false)
 const restoring = ref(false)
 const error = ref<string | null>(null)
+const guestLimitReached = ref(false)
 const answer = ref('')
 const sources = ref<Source[]>([])
 const sessionId = ref<string | null>(null)
@@ -44,6 +45,12 @@ let followUpSeq = 0
 
 function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'Something went wrong.'
+}
+
+// The backend rejects anonymous callers who already used their single AI
+// search (AISY02004) — surface a sign-in CTA instead of a retry loop.
+function isGuestLimit(cause: unknown): boolean {
+  return cause instanceof ApiError && cause.code === 'AISY02004'
 }
 
 function collapsePriorContent() {
@@ -118,6 +125,7 @@ function resetState() {
   loading.value = false
   restoring.value = false
   error.value = null
+  guestLimitReached.value = false
   answer.value = ''
   sources.value = []
   sessionId.value = null
@@ -171,6 +179,7 @@ async function runInitial() {
     elapsed.value = Math.round((performance.now() - startedAt) / 100) / 10
     persistState()
   } catch (cause) {
+    guestLimitReached.value = isGuestLimit(cause)
     error.value = messageOf(cause)
   } finally {
     loading.value = false
@@ -221,6 +230,7 @@ async function followUp(question: string) {
   } catch (cause) {
     thread.value[index].error = messageOf(cause)
     thread.value[index].loading = false
+    if (isGuestLimit(cause)) guestLimitReached.value = true
   } finally {
     locating.value = false
     if (activeFollowUpId.value === id) activeFollowUpId.value = null
@@ -257,7 +267,12 @@ async function submitUrl(url: string) {
     primaryCollapsed.value = false
     persistState()
   } catch (cause) {
-    urlError.value = messageOf(cause)
+    if (isGuestLimit(cause)) {
+      guestLimitReached.value = true
+      error.value = messageOf(cause)
+    } else {
+      urlError.value = messageOf(cause)
+    }
   } finally {
     urlLoading.value = false
   }
@@ -310,7 +325,11 @@ watch(
       <p v-if="locationMissing" class="location-note">Location wasn't shared, so nearby results may be less accurate. Allow location access in your browser for better local answers.</p>
       <h1 class="result-query">{{ query || 'Your question' }}</h1>
 
-      <ErrorBanner v-if="error && !loading && !restoring" :message="error" @retry="runInitial" />
+      <div v-if="guestLimitReached && error && !loading && !restoring" class="guest-limit-banner" role="alert">
+        <span class="guest-limit-copy">{{ error }}</span>
+        <button type="button" class="base-button button-primary" @click="router.push('/login')">Sign in to keep searching</button>
+      </div>
+      <ErrorBanner v-else-if="error && !loading && !restoring" :message="error" @retry="runInitial" />
 
       <article v-if="loading || restoring" class="summary-card">
         <div class="section-label">{{ mode === 'search' ? 'Web results' : 'AI overview' }}</div>
@@ -411,6 +430,21 @@ watch(
   color: var(--color-muted);
   font-size: .78rem;
 }
+.guest-limit-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 14px 18px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 26%, var(--color-border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+  color: var(--color-text);
+  font-size: .9rem;
+}
+.guest-limit-copy { line-height: 1.5; }
+@media (max-width: 520px) { .guest-limit-banner { align-items: flex-start; flex-direction: column; } }
 .result-location-tag { color: var(--color-primary); font-weight: 680; }
 .location-note {
   margin: 12px 0 0;
