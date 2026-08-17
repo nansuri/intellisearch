@@ -53,17 +53,45 @@ func TestAdminCreateProviderAcceptsNewProviderTypes(t *testing.T) {
 		providerType string
 		baseURL      string
 		model        string
+		apiKey       string
 	}{
-		{"pollinations", "pollinations", "https://text.pollinations.ai", "openai"},
-		{"huggingface", "huggingface", "https://router.huggingface.co/v1", "Qwen/Qwen3-70B-Instruct"},
+		{"pollinations", "pollinations", "https://gen.pollinations.ai", "openai", "pk_test_123"},
+		{"huggingface", "huggingface", "https://router.huggingface.co/v1", "Qwen/Qwen3-70B-Instruct", "hf_test_token"},
 	} {
-		provider, err := admin.CreateProvider(tc.name, tc.providerType, tc.baseURL, tc.model, nil, "", false)
+		provider, err := admin.CreateProvider(tc.name, tc.providerType, tc.baseURL, tc.model, nil, tc.apiKey, false)
 		if err != nil {
 			t.Fatalf("expected %s to be accepted, got %v", tc.providerType, err)
 		}
 		if provider.ProviderType != tc.providerType {
 			t.Fatalf("unexpected provider type %q", provider.ProviderType)
 		}
+	}
+}
+
+func TestAdminPollinationsRequiresAPIKey(t *testing.T) {
+	db := newTestDB(t)
+	admin := NewAdminService(repositories.NewProviderRepository(db), repositories.NewQueueConfigRepository(db), repositories.NewSiteRepository(db), "k", t.TempDir())
+	// Creating a pollinations provider without a key is rejected.
+	if _, err := admin.CreateProvider("poll-no-key", "pollinations", "https://gen.pollinations.ai", "openai", nil, "", false); !errors.Is(err, ErrProviderInvalid) {
+		t.Fatalf("expected ErrProviderInvalid for keyless pollinations, got %v", err)
+	}
+	// Switching an existing keyless provider to pollinations without supplying a
+	// key is rejected (the type requires one).
+	keyless, err := admin.CreateProvider("keyless", "openai_compatible", "https://api.example.com", "model", nil, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.UpdateProvider(keyless.ID, "keyless", "pollinations", "https://gen.pollinations.ai", "openai", nil, "", false); !errors.Is(err, ErrProviderInvalid) {
+		t.Fatalf("expected ErrProviderInvalid when switching to pollinations without a key, got %v", err)
+	}
+	// A pollinations provider with a stored key keeps it when the key field is
+	// left blank ("blank keeps existing" semantics).
+	keyed, err := admin.CreateProvider("poll-keyed", "pollinations", "https://gen.pollinations.ai", "openai", nil, "pk_test_123", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.UpdateProvider(keyed.ID, "poll-keyed", "pollinations", "https://gen.pollinations.ai", "openai", nil, "", false); err != nil {
+		t.Fatalf("blank key should keep the stored key, got %v", err)
 	}
 }
 

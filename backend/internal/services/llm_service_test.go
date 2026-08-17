@@ -82,7 +82,7 @@ func TestGenerateWithPollinations(t *testing.T) {
 	var received map[string]any
 	var authHeader string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/openai" {
+		if r.URL.Path != "/v1/chat/completions" {
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
 		authHeader = r.Header.Get("Authorization")
@@ -93,9 +93,13 @@ func TestGenerateWithPollinations(t *testing.T) {
 	}))
 	defer server.Close()
 
+	sealed, err := EncryptSecret("pk_test_pollinations", []byte("key"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	service := NewLLMService(nil, "key")
-	// Pollinations is keyless — no Authorization header must be sent.
-	provider := entities.AIProvider{ProviderType: "pollinations", BaseURL: server.URL, Model: "openai"}
+	// gen.pollinations.ai speaks the OpenAI wire format and requires a Bearer key.
+	provider := entities.AIProvider{ProviderType: "pollinations", BaseURL: server.URL, Model: "openai", APIKeyEncrypted: &sealed}
 	answer, err := service.GenerateWith(context.Background(), provider, "system", []ChatMessage{{Role: "user", Content: "hi"}}, GenerateOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -103,11 +107,31 @@ func TestGenerateWithPollinations(t *testing.T) {
 	if answer != "pollinations answer" {
 		t.Fatalf("unexpected answer %q", answer)
 	}
-	if authHeader != "" {
-		t.Fatalf("expected no auth header for keyless provider, got %q", authHeader)
+	if authHeader != "Bearer pk_test_pollinations" {
+		t.Fatalf("unexpected auth header %q", authHeader)
 	}
 	if received["model"] != "openai" {
 		t.Fatalf("unexpected model %#v", received["model"])
+	}
+}
+
+func TestGenerateWithPollinationsWithoutKey(t *testing.T) {
+	var authHeader string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader = r.Header.Get("Authorization")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}]}`))
+	}))
+	defer server.Close()
+
+	service := NewLLMService(nil, "key")
+	provider := entities.AIProvider{ProviderType: "pollinations", BaseURL: server.URL, Model: "openai"}
+	if _, err := service.GenerateWith(context.Background(), provider, "system", nil, GenerateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	// Validation prevents keyless pollinations providers, but if one slips
+	// through, no Authorization header is sent (the API rejects with 401).
+	if authHeader != "" {
+		t.Fatalf("expected no auth header without a key, got %q", authHeader)
 	}
 }
 

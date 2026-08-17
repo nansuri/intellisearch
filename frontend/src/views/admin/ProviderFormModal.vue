@@ -15,7 +15,7 @@ let lastType: ProviderType = 'ollama'
 const TYPE_PRESETS: Record<ProviderType, { label: string; baseUrl: string; model: string; needsKey: boolean; baseUrlHint: string }> = {
   ollama: { label: 'Ollama', baseUrl: 'http://localhost:11434', model: 'llama3.2', needsKey: false, baseUrlHint: 'Local server — no API key needed' },
   openai_compatible: { label: 'OpenAI-compatible', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', needsKey: true, baseUrlHint: 'Any OpenAI-compatible /v1/chat/completions endpoint' },
-  pollinations: { label: 'Pollinations.ai', baseUrl: 'https://text.pollinations.ai', model: 'openai', needsKey: false, baseUrlHint: 'Keyless — no API key needed' },
+  pollinations: { label: 'Pollinations.ai', baseUrl: 'https://gen.pollinations.ai', model: 'openai', needsKey: true, baseUrlHint: 'API key required — get one at enter.pollinations.ai' },
   huggingface: { label: 'Hugging Face', baseUrl: 'https://router.huggingface.co/v1', model: 'Qwen/Qwen3-70B-Instruct', needsKey: true, baseUrlHint: 'Use an hf_… token from Hugging Face' },
 }
 
@@ -81,7 +81,7 @@ function submit() {
         <input v-model="model" class="text-input" required :placeholder="modelPlaceholder" />
       </FormField>
       <FormField v-if="selectedPreset.needsKey" label="API key" hint="Stored encrypted; leave blank to keep the existing key">
-        <input v-model="apiKey" class="text-input" type="password" :placeholder="provider ? 'Keep current key' : 'sk-… / hf_…'" />
+        <input v-model="apiKey" class="text-input" type="password" :placeholder="provider ? 'Keep current key' : (providerType === 'huggingface' ? 'hf_…' : 'pk_… / sk_…')" />
       </FormField>
       <FormField label="Model parameters (JSON)" :error="parametersError">
         <textarea v-model="parametersText" class="text-input text-area" rows="5" spellcheck="false" />

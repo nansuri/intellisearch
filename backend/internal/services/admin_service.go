@@ -53,6 +53,10 @@ func (s *AdminService) CreateProvider(name, providerType, baseURL, model string,
 	if err != nil {
 		return entities.AIProvider{}, ErrProviderInvalid
 	}
+	// gen.pollinations.ai requires a Bearer key for every request.
+	if providerType == "pollinations" && encrypted == nil {
+		return entities.AIProvider{}, ErrProviderInvalid
+	}
 	provider := entities.AIProvider{ID: uuid.New(), Name: strings.TrimSpace(name), ProviderType: providerType, BaseURL: strings.TrimRight(baseURL, "/"), Model: strings.TrimSpace(model), Parameters: normalizeParameters(parameters), APIKeyEncrypted: encrypted, IsActive: isActive, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
 	if err := s.providers.Create(&provider); err != nil {
 		return entities.AIProvider{}, err
@@ -96,6 +100,15 @@ func (s *AdminService) UpdateProvider(id uuid.UUID, name, providerType, baseURL,
 			return entities.AIProvider{}, ErrProviderInvalid
 		}
 		provider.APIKeyEncrypted = encrypted
+	}
+	// gen.pollinations.ai requires a Bearer key; a provider of that type must
+	// end up with one (either supplied now or already stored).
+	resolvedType := providerType
+	if resolvedType == "" {
+		resolvedType = provider.ProviderType
+	}
+	if resolvedType == "pollinations" && provider.APIKeyEncrypted == nil {
+		return entities.AIProvider{}, ErrProviderInvalid
 	}
 	if isActive {
 		if err := s.providers.SetActive(id); err != nil {

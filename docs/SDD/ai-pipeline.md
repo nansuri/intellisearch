@@ -29,5 +29,5 @@ A single **AI handler** is the only entry point for all AI work. All AI requests
 
 - Local Ollama (privacy-first; no user data leaves the server).
 - Model and parameters are configured via the AI providers table (provider_type `ollama`, `openai_compatible`, `pollinations`, or `huggingface`; `base_url`, `model`, `parameters`), and the active provider is toggled in the control panel without redeploying.
-- **Pollinations.ai** (keyless): `POST {base}/openai` with the OpenAI wire format; base URL `https://text.pollinations.ai`, e.g. model `openai`.
+- **Pollinations.ai** (Bearer key, required): `POST {base}/v1/chat/completions` with the OpenAI wire format; base URL `https://gen.pollinations.ai`, e.g. model `openai`. API keys (`pk_…`/`sk_…`) come from enter.pollinations.ai and are stored encrypted like every other provider key.
 - **Hugging Face** (Bearer key): `POST {base}/chat/completions` with the OpenAI wire format; base URL `https://router.huggingface.co/v1`, e.g. model `Qwen/Qwen3-70B-Instruct`.

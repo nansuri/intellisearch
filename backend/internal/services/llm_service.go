@@ -57,8 +57,8 @@ func (s *LLMService) Generate(ctx context.Context, system string, messages []Cha
 // Supported provider types:
 //   - ollama            POST {base}/api/chat
 //   - openai_compatible POST {base}/v1/chat/completions
-//   - pollinations      POST {base}/openai            (OpenAI-compatible, keyless)
-//   - huggingface       POST {base}/chat/completions  (OpenAI-compatible, Bearer key)
+//   - pollinations      POST {base}/v1/chat/completions  (OpenAI-compatible, Bearer key)
+//   - huggingface       POST {base}/chat/completions    (OpenAI-compatible, Bearer key)
 func (s *LLMService) GenerateWith(ctx context.Context, provider entities.AIProvider, system string, messages []ChatMessage, opts GenerateOptions) (string, error) {
 	chat := []ChatMessage{{Role: "system", Content: system}}
 	chat = append(chat, messages...)
@@ -151,7 +151,10 @@ func openAIEndpoint(providerType string) (string, bool) {
 	case "openai_compatible":
 		return "/v1/chat/completions", true
 	case "pollinations":
-		return "/openai", true
+		// gen.pollinations.ai exposes the same OpenAI-compatible chat-completions
+		// route as openai_compatible (base https://gen.pollinations.ai); the key
+		// is mandatory and sent as a Bearer token.
+		return "/v1/chat/completions", true
 	case "huggingface":
 		return "/chat/completions", true
 	default:
