@@ -117,7 +117,10 @@ onMounted(() => { if (auth.token) { load(); loadHistory() } else notSignedIn.val
         <section class="settings-card">
           <div class="setting-title">
             <div><div class="section-label">History</div><h2>Recent searches</h2><p>Your past questions, used to show recent searches and compose suggestions on the main page.</p></div>
-            <button v-if="history.length" class="base-button button-secondary" @click="confirmClear = true">Clear history</button>
+            <div class="history-actions">
+              <button class="base-button button-secondary" @click="router.push('/history')">Open full history</button>
+              <button v-if="history.length" class="base-button button-secondary" @click="confirmClear = true">Clear history</button>
+            </div>
           </div>
           <div v-if="historyLoading" class="admin-loading"><span class="spinner"></span></div>
           <p v-else-if="historyError" class="history-note">Couldn't load your search history.</p>
@@ -144,6 +147,7 @@ onMounted(() => { if (auth.token) { load(); loadHistory() } else notSignedIn.val
 .avatar-upload-copy strong { font-size: .95rem; }
 .avatar-upload-copy span { color: var(--color-muted); font-size: .82rem; }
 .profile-form { max-width: 520px; margin-top: 26px; }
+.history-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .history-note { margin: 18px 0 0; color: var(--color-muted); font-size: .85rem; }
 .history-list { display: grid; margin: 22px 0 0; padding: 0; list-style: none; }
 .history-item { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 12px 2px; border-bottom: 1px solid var(--color-border); }

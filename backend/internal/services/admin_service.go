@@ -133,18 +133,21 @@ func (s *AdminService) QueueConfig() (entities.AIQueueConfig, error) { return s.
 
 // UpdateQueueConfig validates and persists new concurrency/queue knobs. The AI
 // handler picks them up within its cache TTL, so changes apply without restart.
-func (s *AdminService) UpdateQueueConfig(maxConcurrent, maxQueueSize, requestTimeoutMS, perUserRateLimit int) (entities.AIQueueConfig, error) {
+// suggestionCacheHours tunes how long the AI-composed history suggestions are
+// reused per user before being recomposed (0 = always compose fresh).
+func (s *AdminService) UpdateQueueConfig(maxConcurrent, maxQueueSize, requestTimeoutMS, perUserRateLimit, suggestionCacheHours int) (entities.AIQueueConfig, error) {
 	config, err := s.queueConfig.Get()
 	if err != nil {
 		return config, err
 	}
-	if maxConcurrent < 1 || maxQueueSize < 1 || requestTimeoutMS < 100 || perUserRateLimit < 0 {
+	if maxConcurrent < 1 || maxQueueSize < 1 || requestTimeoutMS < 100 || perUserRateLimit < 0 || suggestionCacheHours < 0 {
 		return config, ErrQueueConfigInvalid
 	}
 	config.MaxConcurrent = maxConcurrent
 	config.MaxQueueSize = maxQueueSize
 	config.RequestTimeoutMS = requestTimeoutMS
 	config.PerUserRateLimit = perUserRateLimit
+	config.SuggestionCacheHours = suggestionCacheHours
 	config.UpdatedAt = time.Now().UTC()
 	if err := s.queueConfig.Update(config); err != nil {
 		return config, err

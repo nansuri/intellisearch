@@ -67,7 +67,7 @@ func adminTestMux(t *testing.T) (*httptest.Server, *gorm.DB) {
 	cfg := config.Config{JWTSecret: "admin-test-secret-32-chars-minimum", JWTTTLHours: 24}
 	authService := services.NewAuthService(repositories.NewUserRepository(db), cfg)
 	userService := services.NewUserService(repositories.NewUserRepository(db), repositories.NewUsageLogRepository(db), t.TempDir())
-	historyService := services.NewSearchHistoryService(repositories.NewSearchHistoryRepository(db), services.NewLLMService(repositories.NewProviderRepository(db), cfg.JWTSecret))
+	historyService := services.NewSearchHistoryService(repositories.NewSearchHistoryRepository(db), repositories.NewMessageRepository(db), services.NewLLMService(repositories.NewProviderRepository(db), cfg.JWTSecret), repositories.NewQueueConfigRepository(db))
 	adminService := services.NewAdminService(repositories.NewProviderRepository(db), repositories.NewQueueConfigRepository(db), repositories.NewSiteRepository(db), cfg.JWTSecret, t.TempDir())
 	statsService := services.NewStatsService(repositories.NewUsageLogRepository(db), repositories.NewUserRepository(db), repositories.NewProviderRepository(db), nil)
 	aiHandler := handlers.NewAIHandler(fakeRunner{}, repositories.NewQueueConfigRepository(db), repositories.NewUserRepository(db), repositories.NewUsageLogRepository(db), allowingLimiter{}, authService)

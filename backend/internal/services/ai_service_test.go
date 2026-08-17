@@ -166,6 +166,18 @@ func TestAnswerRecordsSearchHistoryForLoggedInUsers(t *testing.T) {
 	if len(entries) != 1 || entries[0].Query != "history recording test" {
 		t.Fatalf("expected one history entry, got %#v", entries)
 	}
+	// The entry links to the session and the assistant message that answered it
+	// (the summary source), without duplicating answer text.
+	if entries[0].SessionID == nil || entries[0].MessageID == nil {
+		t.Fatalf("expected session and message IDs on the history entry, got %#v", entries[0])
+	}
+	var assistant entities.Message
+	if err := db.First(&assistant, "id = ?", *entries[0].MessageID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if assistant.Content != "Synthesized answer citing [1] and [2]." {
+		t.Fatalf("summary message content mismatch: %q", assistant.Content)
+	}
 }
 
 func TestAnswerSkipsHistoryForURLSubmissions(t *testing.T) {

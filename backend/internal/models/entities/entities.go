@@ -51,12 +51,13 @@ type SiteSettings struct {
 }
 
 type AIQueueConfig struct {
-	ID               uint      `gorm:"primaryKey" json:"-"`
-	MaxConcurrent    int       `gorm:"not null" json:"maxConcurrent"`
-	MaxQueueSize     int       `gorm:"not null" json:"maxQueueSize"`
-	RequestTimeoutMS int       `gorm:"not null" json:"requestTimeoutMs"`
-	PerUserRateLimit int       `gorm:"not null" json:"perUserRateLimit"`
-	UpdatedAt        time.Time `json:"updatedAt"`
+	ID                   uint      `gorm:"primaryKey" json:"-"`
+	MaxConcurrent        int       `gorm:"not null" json:"maxConcurrent"`
+	MaxQueueSize         int       `gorm:"not null" json:"maxQueueSize"`
+	RequestTimeoutMS     int       `gorm:"not null" json:"requestTimeoutMs"`
+	PerUserRateLimit     int       `gorm:"not null" json:"perUserRateLimit"`
+	SuggestionCacheHours int       `gorm:"not null;default:6" json:"suggestionCacheHours"`
+	UpdatedAt            time.Time `json:"updatedAt"`
 }
 
 type AIProvider struct {
@@ -113,13 +114,18 @@ type UsageLog struct {
 }
 
 // SearchHistory is a per-user record of every search they run. It powers the
-// "recent searches" chips on the main page and the AI-composed suggestions,
-// and can be cleared by the user from Account Settings.
+// "recent searches" chips on the main page, the AI-composed suggestions, and
+// the search-history page, and can be cleared by the user. Instead of storing
+// the full answer text, each row keeps the IDs of the chat session and the
+// assistant message that answered it, so summaries are fetched on demand from
+// the messages table (two UUIDs per row, no answer-text duplication).
 type SearchHistory struct {
-	ID        uint64    `gorm:"primaryKey" json:"id"`
-	UserID    uuid.UUID `gorm:"type:uuid;not null;index:idx_search_history_user,priority:1" json:"userId"`
-	Query     string    `gorm:"type:text;not null" json:"query"`
-	CreatedAt time.Time `gorm:"index:idx_search_history_user,priority:2" json:"createdAt"`
+	ID        uint64     `gorm:"primaryKey" json:"id"`
+	UserID    uuid.UUID  `gorm:"type:uuid;not null;index:idx_search_history_user,priority:1" json:"userId"`
+	Query     string     `gorm:"type:text;not null" json:"query"`
+	SessionID *uuid.UUID `gorm:"type:uuid" json:"sessionId,omitempty"`
+	MessageID *uuid.UUID `gorm:"type:uuid" json:"messageId,omitempty"`
+	CreatedAt time.Time  `gorm:"index:idx_search_history_user,priority:2" json:"createdAt"`
 }
 
 type CrawlJob struct {

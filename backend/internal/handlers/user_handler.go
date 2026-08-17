@@ -72,7 +72,8 @@ func (h *UserHandler) UpdateMe(c *gin.Context) {
 	middleware.JSON(c, http.StatusOK, contracts.OK(user))
 }
 
-// History returns the signed-in user's recent searches, newest first.
+// History returns the signed-in user's recent searches, newest first, each with
+// an on-demand summary of the answer (truncated server-side).
 func (h *UserHandler) History(c *gin.Context) {
 	limit := 20
 	if raw := c.Query("limit"); raw != "" {
@@ -83,7 +84,7 @@ func (h *UserHandler) History(c *gin.Context) {
 	if limit > 100 {
 		limit = 100
 	}
-	entries, err := h.history.Recent(c.MustGet(middleware.UserIDKey).(uuid.UUID), limit)
+	entries, err := h.history.RecentDetailed(c.MustGet(middleware.UserIDKey).(uuid.UUID), limit)
 	if err != nil {
 		logrus.WithError(err).Error("search history load failed")
 		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.USER03001, "Your search history could not be loaded."))
@@ -93,10 +94,13 @@ func (h *UserHandler) History(c *gin.Context) {
 }
 
 // Suggestions returns AI-composed follow-up questions derived from the user's
-// search history. Provider failures degrade to an empty list so the UI just
-// hides the row.
+// search history. Results are cached server-side for a configurable window
+// (ai_queue_config.suggestion_cache_hours); ?refresh=1 bypasses the cache (the
+// main page's ↻ button). Provider failures degrade to an empty list so the UI
+// just hides the row.
 func (h *UserHandler) Suggestions(c *gin.Context) {
-	suggestions, err := h.history.Suggestions(c.Request.Context(), c.MustGet(middleware.UserIDKey).(uuid.UUID))
+	refresh := c.Query("refresh") == "1"
+	suggestions, err := h.history.Suggestions(c.Request.Context(), c.MustGet(middleware.UserIDKey).(uuid.UUID), refresh)
 	if err != nil {
 		if !errors.Is(err, services.ErrHistoryEmpty) {
 			logrus.WithError(err).Error("search history suggestions failed")

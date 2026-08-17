@@ -3,6 +3,7 @@ import { useAuthStore } from '../stores/auth'
 import MainPage from '../views/MainPage.vue'
 import ResultPage from '../views/ResultPage.vue'
 import AccountSettings from '../views/AccountSettings.vue'
+import HistoryView from '../views/HistoryView.vue'
 import AuthView from '../views/AuthView.vue'
 import AuthCallback from '../views/AuthCallback.vue'
 
@@ -12,6 +13,7 @@ const routes = [
   { path: '/', component: MainPage },
   { path: '/search', component: ResultPage },
   { path: '/account', component: AccountSettings, meta: { requiresAuth: true } },
+  { path: '/history', component: HistoryView, meta: { requiresAuth: true } },
   { path: '/login', component: AuthView, meta: { publicAuth: true } },
   { path: '/register', redirect: () => '/login?mode=register' },
   // Login is unified for every account type; keep the old admin path redirecting

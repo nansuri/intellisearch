@@ -104,11 +104,13 @@ func (s *AIService) Answer(ctx context.Context, input AskInput) (AskResult, erro
 	}
 
 	// Record the search in the user's history so the main page can show recent
-	// searches and AI-composed suggestions. URL submissions use a synthetic
-	// query, so they are skipped. Best-effort: a history write failure never
-	// fails the search itself.
+	// searches and AI-composed suggestions, and the history page can show
+	// summaries. Only the session/message IDs are stored (never the answer
+	// text — summaries are fetched from the messages table on demand). URL
+	// submissions use a synthetic query, so they are skipped. Best-effort: a
+	// history write failure never fails the search itself.
 	if s.history != nil && input.UserID != nil && input.URL == "" {
-		_ = s.history.Create(&entities.SearchHistory{ID: uint64(time.Now().UnixNano()), UserID: *input.UserID, Query: query, CreatedAt: time.Now().UTC()})
+		_ = s.history.Create(&entities.SearchHistory{ID: uint64(time.Now().UnixNano()), UserID: *input.UserID, Query: query, SessionID: &session.ID, MessageID: &assistantMessage.ID, CreatedAt: time.Now().UTC()})
 	}
 
 	provider, providerErr := s.providers.Active()

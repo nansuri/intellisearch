@@ -25,9 +25,9 @@ Every API response uses:
 | POST | `/api/v1/ask/url` | public (stricter rate limit, 5/hour) | Crawls a submitted URL and answers about that page. Body: `{ url }`. Response shape matches `/ask`. URLs are SSRF-guarded (scheme + host validation, internal/private ranges blocked). |
 | GET | `/api/v1/sessions/:id` | public (anonymous sessions) or owner (signed-in sessions) | Returns one chat session with message history and per-message `sources`. Anonymous sessions (`userId` null) are readable by id without auth; owned sessions require the owning user. |
 | POST | `/api/v1/me/avatar` | user | Uploads the user's avatar image (JPG/PNG/GIF/WebP ≤ 2 MB) and returns `{ avatarUrl }`. |
-| GET | `/api/v1/me/history` | user | Returns the user's recent searches, newest first. Query: `limit` (default 20, max 100). Response: `{ items: [{ id, query, createdAt }] }`. Every non-URL ask by a signed-in user is recorded here. |
-| GET | `/api/v1/me/history/suggestions` | user | Asks the active LLM to compose 3 follow-up questions from the user's search history. Response: `{ suggestions: [string] }`. Degrades to an empty list when there is no history or the provider is unavailable. |
-| DELETE | `/api/v1/me/history` | user | Deletes all of the user's search history (returns `{ cleared: true }`). History rows power the main-page "recent searches" chips and AI suggestions, and are separate from `usage_logs` (admin stats and quotas are untouched). |
+| GET | `/api/v1/me/history` | user | Returns the user's recent searches, newest first, each with an on-demand answer **summary**. Query: `limit` (default 20, max 100). Response: `{ items: [{ id, query, sessionId?, messageId?, summary?, createdAt }] }`. The summary is the assistant message that answered the search, truncated to ~220 runes — nothing extra is stored (only the message ID lives in `search_history`). Search-only asks have an empty `summary`. Every non-URL ask by a signed-in user is recorded here. |
+| GET | `/api/v1/me/history/suggestions` | user | Returns AI-composed follow-up questions derived from the user's search history. Response: `{ suggestions: [string] }`. Results are **cached server-side per user** for `suggestion_cache_hours` (from `ai_queue_config`, default 6, 0 = always compose fresh); `?refresh=1` bypasses the cache (the main page's ↻ button). Degrades to an empty list when there is no history or the provider is unavailable. |
+| DELETE | `/api/v1/me/history` | user | Deletes all of the user's search history and drops their cached suggestions (returns `{ cleared: true }`). History rows power the main-page "recent searches" chips, the `/history` page, and AI suggestions, and are separate from `usage_logs` (admin stats and quotas are untouched). |
 | GET | `/api/v1/admin/users` | Super Owner | Lists/search users. Query: `q`, `page`, `page_size`. Response: `{ users, total, page, pageSize }`. |
 | POST | `/api/v1/admin/users` | Super Owner | Creates a user. Body: `{ name, email, password, role, aiDailyQuota }`. |
 | PATCH | `/api/v1/admin/users/:id` | Super Owner | Updates role/status/`aiDailyQuota` (partial body allowed). |
@@ -42,7 +42,7 @@ Every API response uses:
 | GET | `/api/v1/admin/ai/ollama/models?baseUrl=…` | Super Owner | Lists the models on an Ollama server (`GET {base}/api/tags`, proxied server-side so the browser never calls Ollama). Returns `{ models: [{ name, size, parameterSize, quantization }] }`. Invalid URL → `ADMN06001` (400); unreachable → `ADMN06001` (502). |
 | GET | `/api/v1/admin/ai/ollama/health?baseUrl=…` | Super Owner | Ollama server health + loaded-model stats: `{ ok, version, runningModels: [{ name, size, sizeVram, cpu, gpu, memory }] }` from `GET {base}/api/version` + `GET {base}/api/ps`. |
 | GET | `/api/v1/admin/ai/queue-config` | Super Owner | Reads `ai_queue_configs` singleton. |
-| PATCH | `/api/v1/admin/ai/queue-config` | Super Owner | Updates `max_concurrent`, `max_queue_size`, `request_timeout_ms`, `per_user_rate_limit` (applies within ~5 s, no redeploy). |
+| PATCH | `/api/v1/admin/ai/queue-config` | Super Owner | Updates `max_concurrent`, `max_queue_size`, `request_timeout_ms`, `per_user_rate_limit`, `suggestion_cache_hours` (applies within ~5 s, no redeploy). `suggestion_cache_hours` controls how long AI-composed history suggestions are reused per user (0 = always compose fresh); negative values are rejected with `ADMN04001`. |
 | GET | `/api/v1/admin/site-settings` | Super Owner | Reads branding: `{ siteName, logoUrl, faviconUrl, tagline }`. |
 | PATCH | `/api/v1/admin/site-settings` | Super Owner | Updates `siteName` and `tagline`. |
 | POST | `/api/v1/admin/site-settings/logo` | Super Owner | Uploads the site logo (returns `{ logoUrl }`). Publically cached for a short TTL. |
@@ -54,7 +54,7 @@ Error-code constants are defined in `backend/internal/contracts/errors.go` and f
 
 ### AI pipeline behavior
 
-- **Queue & concurrency:** knobs (`max_concurrent`, `max_queue_size`, `request_timeout_ms`, `per_user_rate_limit`) are read from the `ai_queue_configs` singleton with a 5-second cache, so Owner Control Panel edits apply without restarting. Queue overflow returns `AISY02001` with a friendly "busy, try again" message.
+- **Queue & concurrency:** knobs (`max_concurrent`, `max_queue_size`, `request_timeout_ms`, `per_user_rate_limit`, `suggestion_cache_hours`) are read from the `ai_queue_configs` singleton with a 5-second cache, so Owner Control Panel edits apply without restarting. Queue overflow returns `AISY02001` with a friendly "busy, try again" message.
 - **Rate limiting (Redis sliding window):** applies per user (or per IP for anonymous callers) via `ratelimit:ask:{key}`. URL submission is limited to 5/hour regardless of the configured per-user limit.
 - **Daily quota:** authenticated users with a personal `ai_daily_quota` are limited to that many asks per UTC day (`AISY02003`); `0` means unlimited.
 - **Graceful degradation:** if SearXNG is unreachable the LLM still answers without web sources. Every ask persists a `chat_sessions` row, user/assistant `messages`, `search_results` (source cards), and a `usage_logs` row with status/error/latency for the statistics panel.

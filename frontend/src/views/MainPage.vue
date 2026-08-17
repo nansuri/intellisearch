@@ -26,10 +26,9 @@ const suggestionsLoading = ref(false)
 const historyError = ref(false)
 const signedIn = computed(() => Boolean(auth.token && auth.isAuthed))
 
-// Suggestions are composed by the LLM, so cache them per user for a few minutes
-// instead of spending a model call on every visit to the main page.
-const suggestionCache = new Map<string, { at: number; items: string[] }>()
-const SUGGESTION_TTL_MS = 10 * 60 * 1000
+// Suggestions are composed by the LLM, so the backend caches them per user for
+// a configurable window (ai_queue_config.suggestion_cache_hours, editable from
+// the Owner Control Panel → Queue & limits). The ↻ button forces a refresh.
 
 function loadRecent() {
   if (!signedIn.value) return
@@ -53,17 +52,10 @@ function loadRecent() {
 
 async function loadSuggestions(force = false) {
   if (!signedIn.value) return
-  const userId = auth.user?.id || 'anon'
-  const cached = suggestionCache.get(userId)
-  if (!force && cached && Date.now() - cached.at < SUGGESTION_TTL_MS) {
-    suggestions.value = cached.items
-    return
-  }
   suggestionsLoading.value = true
   try {
-    const { suggestions: items } = await getHistorySuggestions()
+    const { suggestions: items } = await getHistorySuggestions(force)
     suggestions.value = items
-    suggestionCache.set(userId, { at: Date.now(), items })
   } catch {
     suggestions.value = []
   } finally {

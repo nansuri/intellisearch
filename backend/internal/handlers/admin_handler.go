@@ -249,16 +249,17 @@ func (h *AdminHandler) QueueConfig(c *gin.Context) {
 
 func (h *AdminHandler) UpdateQueueConfig(c *gin.Context) {
 	var request struct {
-		MaxConcurrent    int `json:"maxConcurrent"`
-		MaxQueueSize     int `json:"maxQueueSize"`
-		RequestTimeoutMS int `json:"requestTimeoutMs"`
-		PerUserRateLimit int `json:"perUserRateLimit"`
+		MaxConcurrent        int `json:"maxConcurrent"`
+		MaxQueueSize         int `json:"maxQueueSize"`
+		RequestTimeoutMS     int `json:"requestTimeoutMs"`
+		PerUserRateLimit     int `json:"perUserRateLimit"`
+		SuggestionCacheHours int `json:"suggestionCacheHours"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
 		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN04001, "Enter valid queue settings."))
 		return
 	}
-	config, err := h.admin.UpdateQueueConfig(request.MaxConcurrent, request.MaxQueueSize, request.RequestTimeoutMS, request.PerUserRateLimit)
+	config, err := h.admin.UpdateQueueConfig(request.MaxConcurrent, request.MaxQueueSize, request.RequestTimeoutMS, request.PerUserRateLimit, request.SuggestionCacheHours)
 	if err != nil {
 		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN04001, "That queue configuration is not valid."))
 		return

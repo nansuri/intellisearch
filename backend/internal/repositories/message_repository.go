@@ -24,3 +24,21 @@ func (r *MessageRepository) CreateSources(sources []entities.SearchResult) error
 	}
 	return r.db.Create(&sources).Error
 }
+
+// Summaries returns the content of the given messages keyed by message ID,
+// used to render search-history summaries without duplicating answer text in
+// the search_history table.
+func (r *MessageRepository) Summaries(messageIDs []uuid.UUID) (map[uuid.UUID]string, error) {
+	out := make(map[uuid.UUID]string, len(messageIDs))
+	if len(messageIDs) == 0 {
+		return out, nil
+	}
+	var messages []entities.Message
+	if err := r.db.Where("id IN ?", messageIDs).Find(&messages).Error; err != nil {
+		return nil, err
+	}
+	for _, message := range messages {
+		out[message.ID] = message.Content
+	}
+	return out, nil
+}

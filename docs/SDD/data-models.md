@@ -71,6 +71,7 @@
 | max_queue_size | int | |
 | request_timeout_ms | int | |
 | per_user_rate_limit | int | questions per minute per user; 0 = unlimited |
+| suggestion_cache_hours | int | hours the AI-composed history suggestions are reused per user before recomposing; 0 = always compose fresh. Editable from the Owner Control Panel (Queue & limits). |
 
 ### site_settings (singleton row)
 | Field | Type | Notes |
@@ -89,9 +90,11 @@
 | id | bigserial (PK) | |
 | user_id | UUID (FK → users) | indexed with created_at |
 | query | text | sanitized question as asked |
+| session_id | UUID (FK → chat_sessions) | nullable; the chat thread the search ran in |
+| message_id | UUID (FK → messages) | nullable; the assistant message that answered the search — the summary source |
 | created_at | timestamptz | |
 
-> Every non-URL ask by a signed-in user is recorded here. It powers the main-page "recent searches" chips and the AI-composed suggestions, and can be cleared by the user from Account Settings — deliberately separate from `usage_logs`, which keeps admin statistics and quota accounting intact.
+> Every non-URL ask by a signed-in user is recorded here. It powers the main-page "recent searches" chips, the AI-composed suggestions, and the `/history` page (which shows an on-demand **summary** — the linked assistant message's content, truncated — so the full answer text is never duplicated in this table; only two UUIDs per row). Clearing removes the user's rows and their cached suggestions. Deliberately separate from `usage_logs`, which keeps admin statistics and quota accounting intact.
 
 ### usage_logs
 | Field | Type | Notes |

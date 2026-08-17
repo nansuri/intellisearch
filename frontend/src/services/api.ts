@@ -64,8 +64,8 @@ export type UsersPage = { users: User[]; total: number; page: number; pageSize: 
 
 export type ProviderType = 'ollama' | 'openai_compatible' | 'pollinations' | 'huggingface'
 export type Provider = { id: string; name: string; providerType: ProviderType; baseUrl: string; model: string; parameters: Record<string, unknown> | null; isActive: boolean }
-export type HistoryItem = { id: number; query: string; createdAt: string }
-export type QueueConfig = { maxConcurrent: number; maxQueueSize: number; requestTimeoutMs: number; perUserRateLimit: number }
+export type HistoryItem = { id: number; query: string; createdAt: string; sessionId?: string; summary?: string }
+export type QueueConfig = { maxConcurrent: number; maxQueueSize: number; requestTimeoutMs: number; perUserRateLimit: number; suggestionCacheHours: number }
 export type OllamaModel = { name: string; size: number; parameterSize?: string; quantization?: string }
 export type OllamaRunningModel = { name: string; size: number; sizeVram: number; cpu?: string; gpu?: string; memory?: string }
 export type OllamaHealth = { version: string; runningModels: OllamaRunningModel[] }
@@ -98,7 +98,7 @@ export const uploadAvatar = (file: File) => upload<{ avatarUrl: string }>('/me/a
 
 // Search history
 export const getHistory = (limit = 20) => request<{ items: HistoryItem[] }>(`/me/history?limit=${limit}`)
-export const getHistorySuggestions = () => request<{ suggestions: string[] }>('/me/history/suggestions')
+export const getHistorySuggestions = (refresh = false) => request<{ suggestions: string[] }>(`/me/history/suggestions${refresh ? '?refresh=1' : ''}`)
 export const clearHistory = () => request<{ cleared: boolean }>('/me/history', { method: 'DELETE' })
 
 // Admin — users

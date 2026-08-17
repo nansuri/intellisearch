@@ -60,7 +60,7 @@ func main() {
 	statsService := services.NewStatsService(usageLogRepository, userRepository, providerRepository, aiHandler)
 	adminHandler := handlers.NewAdminHandler(userService, adminService, statsService, services.NewOllamaService())
 	sessionHandler := handlers.NewSessionHandler(sessionRepository, messageRepository, authService)
-	historyService := services.NewSearchHistoryService(searchHistoryRepository, llmService)
+	historyService := services.NewSearchHistoryService(searchHistoryRepository, messageRepository, llmService, queueConfigRepository)
 
 	api := router.New(cfg.CORSOrigins, cfg.UploadsDir, siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService, historyService), sessionHandler, aiHandler, adminHandler, authService)
 	if err := api.Run(fmt.Sprintf(":%s", cfg.Port)); err != nil {
