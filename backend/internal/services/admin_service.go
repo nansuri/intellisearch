@@ -136,13 +136,13 @@ func (s *AdminService) QueueConfig() (entities.AIQueueConfig, error) { return s.
 // suggestionCacheHours tunes how long the AI-composed history suggestions are
 // reused per user before being recomposed (0 = always compose fresh);
 // defaultDailyQuota is the quota applied to accounts registered afterwards
-// (0 = unlimited).
-func (s *AdminService) UpdateQueueConfig(maxConcurrent, maxQueueSize, requestTimeoutMS, perUserRateLimit, suggestionCacheHours, defaultDailyQuota int) (entities.AIQueueConfig, error) {
+// (0 = unlimited); maxImageResults caps image results per search (0 = unlimited).
+func (s *AdminService) UpdateQueueConfig(maxConcurrent, maxQueueSize, requestTimeoutMS, perUserRateLimit, suggestionCacheHours, defaultDailyQuota, maxImageResults int) (entities.AIQueueConfig, error) {
 	config, err := s.queueConfig.Get()
 	if err != nil {
 		return config, err
 	}
-	if maxConcurrent < 1 || maxQueueSize < 1 || requestTimeoutMS < 100 || perUserRateLimit < 0 || suggestionCacheHours < 0 || defaultDailyQuota < 0 {
+	if maxConcurrent < 1 || maxQueueSize < 1 || requestTimeoutMS < 100 || perUserRateLimit < 0 || suggestionCacheHours < 0 || defaultDailyQuota < 0 || maxImageResults < 0 {
 		return config, ErrQueueConfigInvalid
 	}
 	config.MaxConcurrent = maxConcurrent
@@ -151,6 +151,7 @@ func (s *AdminService) UpdateQueueConfig(maxConcurrent, maxQueueSize, requestTim
 	config.PerUserRateLimit = perUserRateLimit
 	config.SuggestionCacheHours = suggestionCacheHours
 	config.DefaultDailyQuota = defaultDailyQuota
+	config.MaxImageResults = maxImageResults
 	config.UpdatedAt = time.Now().UTC()
 	if err := s.queueConfig.Update(config); err != nil {
 		return config, err

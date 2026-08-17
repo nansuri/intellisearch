@@ -138,6 +138,9 @@ func (h *UserHandler) Avatar(c *gin.Context) {
 			middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.USER02002, "The avatar must be a JPG, PNG, GIF, or WebP under 2 MB."))
 			return
 		}
+		// Avatar saves share the logo problem: a missing/unwritable UPLOADS_DIR
+		// in the container surfaces here — log the cause for diagnosis.
+		logrus.WithError(err).Error("avatar upload failed")
 		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.USER02001, "Your avatar could not be saved."))
 		return
 	}

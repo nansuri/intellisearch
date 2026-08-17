@@ -76,8 +76,9 @@ func (s *SearchService) Search(ctx context.Context, query string) ([]SourceItem,
 
 // SearchImages queries SearXNG's images category and maps the results to
 // lightweight image items (thumbnails + origin URLs). Best-effort by design:
-// callers treat an error as "no images" rather than failing the ask.
-func (s *SearchService) SearchImages(ctx context.Context, query string) ([]ImageItem, error) {
+// callers treat an error as "no images" rather than failing the ask. A
+// positive limit caps how many items are returned (0 = no limit).
+func (s *SearchService) SearchImages(ctx context.Context, query string, limit int) ([]ImageItem, error) {
 	requestURL := fmt.Sprintf("%s/search?q=%s&categories=images&format=json", s.baseURL, url.QueryEscape(query))
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
@@ -119,6 +120,9 @@ func (s *SearchService) SearchImages(ctx context.Context, query string) ([]Image
 			Width:        width,
 			Height:       height,
 		})
+		if limit > 0 && len(items) >= limit {
+			break
+		}
 	}
 	return items, nil
 }

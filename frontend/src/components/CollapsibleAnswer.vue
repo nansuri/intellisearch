@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import MarkdownView from './MarkdownView.vue'
-import SourceCard from './SourceCard.vue'
+import WebResultList from './WebResultList.vue'
 import { answerPreview } from '../utils/answerSummary'
 import type { Source } from '../services/api'
 
@@ -9,6 +9,7 @@ const props = withDefaults(defineProps<{
   label: string
   answer: string
   sources?: Source[]
+  query?: string
   collapsed?: boolean
   highlighted?: boolean
   showSources?: boolean
@@ -16,6 +17,7 @@ const props = withDefaults(defineProps<{
   emptyLabel?: string
 }>(), {
   sources: () => [],
+  query: '',
   collapsed: false,
   highlighted: false,
   showSources: true,
@@ -51,7 +53,7 @@ function collapse() { emit('update:collapsed', true) }
       <span class="collapsed-chip-label">{{ label }}</span>
       <p class="collapsed-chip-preview">{{ preview }}</p>
       <span class="collapsed-chip-meta">
-        <span v-if="sources.length">{{ sources.length }} source{{ sources.length === 1 ? '' : 's' }}</span>
+        <span v-if="sources.length">{{ sources.length }} result{{ sources.length === 1 ? '' : 's' }}</span>
         <span class="collapsed-chip-action">Show full answer</span>
       </span>
     </button>
@@ -64,10 +66,13 @@ function collapse() { emit('update:collapsed', true) }
       <MarkdownView v-if="answer" :content="answer" />
       <p v-else>{{ emptyLabel }}</p>
 
-      <section v-if="showSources && sources.length" class="sources sources--nested">
-        <div class="sources-heading"><h2>Sources</h2><span>{{ sources.length }} results</span></div>
-        <SourceCard v-for="source in sources" :key="source.position" :source="source" />
-      </section>
+      <WebResultList
+        v-if="showSources && sources.length"
+        :sources="sources"
+        :query="query"
+        heading="Read more"
+        class="sources--nested"
+      />
     </template>
   </article>
 </template>
@@ -146,7 +151,8 @@ function collapse() { emit('update:collapsed', true) }
   font-size: .72rem;
 }
 .collapsed-chip-action { color: var(--color-primary); font-weight: 650; }
-.sources--nested { margin-top: 8px; }
+.sources--nested { margin-top: 0; }
+:deep(.web-results) { margin-top: 6px; }
 .collapsible-answer--compact { margin-top: 0; padding-bottom: 20px; }
 .collapsible-answer--compact.collapsible-answer--collapsed { margin-top: 0; }
 @keyframes answer-spotlight {

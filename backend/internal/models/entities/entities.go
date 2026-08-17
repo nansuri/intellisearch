@@ -61,8 +61,12 @@ type AIQueueConfig struct {
 	// users (password or Google SSO). 0 means unlimited, matching the per-user
 	// AIDailyQuota semantics; the Owner Control Panel can change it anytime and
 	// it only affects accounts created afterwards.
-	DefaultDailyQuota int       `gorm:"not null;default:3" json:"defaultDailyQuota"`
-	UpdatedAt         time.Time `json:"updatedAt"`
+	DefaultDailyQuota int `gorm:"not null;default:3" json:"defaultDailyQuota"`
+	// MaxImageResults caps how many image results are returned/persisted per
+	// web-search ask (0 = unlimited). Follow-up asks skip the image search
+	// entirely, so this only bounds the primary search. Admin-configurable.
+	MaxImageResults int       `gorm:"not null;default:20" json:"maxImageResults"`
+	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
 type AIProvider struct {

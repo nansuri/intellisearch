@@ -3,7 +3,6 @@ import { nextTick, onMounted, ref, watch } from 'vue'
 import ErrorBanner from './ErrorBanner.vue'
 import FollowUpLoading from './FollowUpLoading.vue'
 import CollapsibleAnswer from './CollapsibleAnswer.vue'
-import ImageGrid from './ImageGrid.vue'
 import type { ImageItem, Source } from '../services/api'
 
 export type FollowUpEntry = {
@@ -66,6 +65,7 @@ defineExpose({ scrollToBlock })
         :label="searchOnly ? 'Summary from top results' : 'AI overview'"
         :answer="entry.answer"
         :sources="entry.sources"
+        :query="entry.question"
         :collapsed="entry.collapsed"
         :highlighted="entry.highlighted"
         :empty-label="searchOnly ? 'No web results to summarize.' : undefined"
@@ -73,7 +73,6 @@ defineExpose({ scrollToBlock })
         class="follow-up-answer"
         @update:collapsed="emit('update:collapsed', $event)"
       />
-      <ImageGrid v-if="entry.images.length" :images="entry.images" class="follow-up-images" />
     </template>
   </div>
 </template>
@@ -106,7 +105,6 @@ defineExpose({ scrollToBlock })
   letter-spacing: .06em;
   text-transform: uppercase;
 }
-.follow-up-images { margin-top: 8px; }
 .follow-up-answer { margin-top: 0; }
 @keyframes follow-up-nudge {
   0% { transform: translateY(6px); opacity: .72; }

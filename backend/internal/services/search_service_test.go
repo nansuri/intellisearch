@@ -18,9 +18,14 @@ func TestSearchImagesParsesSearXNGImageResults(t *testing.T) {
 	}))
 	defer server.Close()
 	service := NewSearchService(config.Config{SearXNGBaseURL: server.URL, SearXNGTimeoutMS: 1000})
-	images, err := service.SearchImages(context.Background(), "mountains")
+	images, err := service.SearchImages(context.Background(), "mountains", 0)
 	if err != nil || len(images) != 2 {
 		t.Fatalf("unexpected images: %#v, %v", images, err)
+	}
+	// A positive limit caps the results (0 = no limit).
+	capped, err := service.SearchImages(context.Background(), "mountains", 1)
+	if err != nil || len(capped) != 1 || capped[0].Position != 1 {
+		t.Fatalf("expected a single capped image, got %#v (err=%v)", capped, err)
 	}
 	first := images[0]
 	if first.Position != 1 || first.ThumbnailURL != "https://photos.example.com/a-thumb.jpg" || first.Width != 1920 || first.Height != 1080 {

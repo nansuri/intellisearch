@@ -266,12 +266,13 @@ func (h *AdminHandler) UpdateQueueConfig(c *gin.Context) {
 		PerUserRateLimit     int `json:"perUserRateLimit"`
 		SuggestionCacheHours int `json:"suggestionCacheHours"`
 		DefaultDailyQuota    int `json:"defaultDailyQuota"`
+		MaxImageResults      int `json:"maxImageResults"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
 		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN04001, "Enter valid queue settings."))
 		return
 	}
-	config, err := h.admin.UpdateQueueConfig(request.MaxConcurrent, request.MaxQueueSize, request.RequestTimeoutMS, request.PerUserRateLimit, request.SuggestionCacheHours, request.DefaultDailyQuota)
+	config, err := h.admin.UpdateQueueConfig(request.MaxConcurrent, request.MaxQueueSize, request.RequestTimeoutMS, request.PerUserRateLimit, request.SuggestionCacheHours, request.DefaultDailyQuota, request.MaxImageResults)
 	if err != nil {
 		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN04001, "That queue configuration is not valid."))
 		return
@@ -322,6 +323,9 @@ func (h *AdminHandler) UploadLogo(c *gin.Context) {
 			middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN05002, "The logo must be a JPG, PNG, GIF, or WebP under 2 MB."))
 			return
 		}
+		// ADMN05002 with the cause in the logs — upload failures are almost
+		// always a missing/unwritable UPLOADS_DIR in the container.
+		logrus.WithError(err).Error("site logo upload failed")
 		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.ADMN05002, "That logo could not be saved."))
 		return
 	}
@@ -353,6 +357,7 @@ func (h *AdminHandler) UploadFavicon(c *gin.Context) {
 			middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN05003, "The favicon must be a JPG, PNG, GIF, or WebP under 2 MB."))
 			return
 		}
+		logrus.WithError(err).Error("site favicon upload failed")
 		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.ADMN05003, "That favicon could not be saved."))
 		return
 	}

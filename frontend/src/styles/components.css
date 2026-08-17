@@ -43,14 +43,6 @@ select:hover { background: var(--color-surface-subtle); color: var(--color-text)
 .tabs { display: flex; gap: 28px; width: 100%; margin-top: 42px; overflow-x: auto; border-bottom: 1px solid var(--color-border); }
 .tabs button { min-height: 46px; padding: 0 1px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--color-muted); cursor: pointer; font-size: .84rem; font-weight: 650; white-space: nowrap; }
 .tabs button.active { border-color: var(--color-primary); color: var(--color-text); }
-.source-card { display: flex; gap: 18px; padding: 22px 0; border-bottom: 1px solid var(--color-border); }
-.source-number { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 auto; border-radius: 8px; background: var(--color-surface-subtle); color: var(--color-muted); font-size: .73rem; font-weight: 750; }
-.source-copy { display: grid; gap: 4px; min-width: 0; }
-.source-copy small, .source-url { color: var(--color-muted); font-size: .72rem; }
-.source-copy a { width: fit-content; color: var(--color-text); font-size: 1rem; font-weight: 680; letter-spacing: -.015em; text-decoration: none; }
-.source-copy a:hover { color: var(--color-primary); }
-.source-copy p { margin: 2px 0; color: var(--color-muted); font-size: .86rem; line-height: 1.55; }
-.source-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .error-banner { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 26px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--color-danger) 35%, var(--color-border)); border-radius: 12px; background: color-mix(in srgb, var(--color-danger) 8%, var(--color-surface)); }
 .error-banner-copy { color: var(--color-text); font-size: .86rem; line-height: 1.5; }
 .url-ask-box { width: 100%; }

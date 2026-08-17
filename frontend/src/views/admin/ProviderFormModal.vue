@@ -10,6 +10,9 @@ const name = ref(''); const providerType = ref<ProviderType>('ollama')
 const baseUrl = ref(''); const model = ref(''); const apiKey = ref(''); const isActive = ref(true)
 const parametersText = ref(''); const parametersError = ref('')
 const saving = ref(false)
+// When true the model field is a plain input; otherwise (Ollama models loaded)
+// it is a real <select> dropdown. Selecting "Type a custom model…" flips this.
+const modelCustom = ref(false)
 let lastType: ProviderType = 'ollama'
 
 // Ollama server introspection (proxied through the Go API — the browser never
@@ -31,11 +34,31 @@ const modelPlaceholder = computed(() => selectedPreset.value.model)
 const isOllama = computed(() => providerType.value === 'ollama')
 const ollamaConnected = computed(() => ollamaStatus.value === 'ok')
 
+// Real dropdown once the Ollama server's models are known; otherwise the field
+// stays a text input (there is nothing to choose from).
+const showModelSelect = computed(() => isOllama.value && ollamaConnected.value && ollamaModels.value.length > 0)
+// A provider being edited may reference a model that no longer exists on the
+// server — keep it selectable so the form never shows a blank dropdown.
+const modelOptions = computed(() => {
+  const names = ollamaModels.value.map((m) => m.name)
+  if (model.value && !names.includes(model.value)) return [model.value, ...names]
+  return names
+})
+
+const CUSTOM_MODEL = '__custom_model__'
+function onModelSelectChange() {
+  if (model.value === CUSTOM_MODEL) {
+    modelCustom.value = true
+    model.value = ''
+  }
+}
+
 function resetOllama() {
   ollamaModels.value = []
   ollamaHealth.value = null
   ollamaStatus.value = 'idle'
   ollamaError.value = ''
+  modelCustom.value = false
 }
 
 async function loadOllama() {
@@ -73,6 +96,7 @@ watch(() => props.open, (v) => {
   isActive.value = props.provider?.isActive ?? true
   parametersText.value = props.provider?.parameters ? JSON.stringify(props.provider.parameters, null, 2) : '{\n  "temperature": 0.7\n}'
   parametersError.value = ''
+  modelCustom.value = false
   resetOllama()
   if (isOllama.value && baseUrl.value.trim()) loadOllama()
 })
@@ -125,11 +149,12 @@ function submit() {
       <FormField label="Base URL" :hint="selectedPreset.baseUrlHint" :error="baseUrl ? '' : undefined">
         <input v-model="baseUrl" class="text-input" type="url" required :placeholder="selectedPreset.baseUrl" @change="onBaseUrlChange" />
       </FormField>
-      <FormField label="Model" :hint="isOllama && ollamaConnected ? `${ollamaModels.length} models available — pick one or type a name` : undefined" :error="model ? '' : undefined">
-        <input v-model="model" class="text-input" required :placeholder="modelPlaceholder" :list="isOllama && ollamaModels.length ? 'ollama-model-list' : undefined" />
-        <datalist v-if="isOllama && ollamaModels.length" id="ollama-model-list">
-          <option v-for="m in ollamaModels" :key="m.name" :value="m.name" />
-        </datalist>
+      <FormField label="Model" :hint="showModelSelect && !modelCustom ? `${ollamaModels.length} models available on the server` : undefined" :error="model ? '' : undefined">
+        <select v-if="showModelSelect && !modelCustom" v-model="model" class="text-input" required @change="onModelSelectChange">
+          <option v-for="m in modelOptions" :key="m" :value="m">{{ m }}</option>
+          <option :value="CUSTOM_MODEL">Type a custom model…</option>
+        </select>
+        <input v-else v-model="model" class="text-input" required :placeholder="modelPlaceholder" />
       </FormField>
       <FormField v-if="isOllama" label="Ollama server" hint="Models and health are fetched server-side through the API.">
         <button type="button" class="base-button button-secondary ollama-load" :disabled="!baseUrl.trim() || ollamaStatus === 'loading'" @click="loadOllama">

@@ -8,8 +8,8 @@ import UrlAskBox from '../components/UrlAskBox.vue'
 import CollapsibleAnswer from '../components/CollapsibleAnswer.vue'
 import FollowUpBlock, { type FollowUpEntry } from '../components/FollowUpBlock.vue'
 import ImageGrid from '../components/ImageGrid.vue'
+import WebResultList from '../components/WebResultList.vue'
 import { useSiteStore } from '../stores/site'
-import SourceCard from '../components/SourceCard.vue'
 import { ask, askUrl, getSession, ApiError, type AskMode, type ImageItem, type Source } from '../services/api'
 import { clearSearchSession } from '../composables/useSearchSession'
 import { settleAskGhost } from '../services/motion'
@@ -384,6 +384,7 @@ watch(
               label="AI overview"
               :answer="answer"
               :sources="sources"
+              :query="query"
               :collapsed="primaryCollapsed"
               @update:collapsed="(value) => { primaryCollapsed = value; persistState() }"
             />
@@ -403,13 +404,11 @@ watch(
               label="Summary from top results"
               :answer="answer"
               :sources="sources"
+              :query="query"
               :collapsed="primaryCollapsed"
               @update:collapsed="(value) => { primaryCollapsed = value; persistState() }"
             />
-            <div v-if="!answer && sources.length" class="sources">
-              <div class="sources-heading"><h2>Results</h2><span>{{ sources.length }} found</span></div>
-              <SourceCard v-for="source in sources" :key="source.position" :source="source" />
-            </div>
+            <WebResultList v-else-if="sources.length" :sources="sources" :query="query" heading="Web results" />
             <div v-if="!answer && !sources.length" class="empty-sources">
               <div class="empty-source-copy">
                 <h2>No web results found</h2>
@@ -466,7 +465,7 @@ watch(
 .search-results-title { margin: 6px 0 0; font-size: 1.35rem; letter-spacing: -.03em; }
 .search-upgrade { flex: 0 0 auto; }
 .search-only-note { margin: 10px 0 0; color: var(--color-muted); font-size: .82rem; }
-.search-results-only .sources { margin-top: 22px; }
+.search-results-only :deep(.web-results) { margin-top: 22px; }
 @media (max-width: 520px) { .search-results-head { align-items: flex-start; flex-direction: column; } }
 .empty-sources--compact {
   margin-top: 8px;

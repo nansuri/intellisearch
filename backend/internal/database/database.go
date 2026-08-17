@@ -45,7 +45,7 @@ func MigrateAndSeed(db *gorm.DB, cfg config.Config) error {
 	if err := seedSingleton(db, 1, &entities.SiteSettings{ID: 1, SiteName: "Intellisearch"}); err != nil {
 		return err
 	}
-	if err := seedSingleton(db, 1, &entities.AIQueueConfig{ID: 1, MaxConcurrent: 4, MaxQueueSize: 20, RequestTimeoutMS: 60000, PerUserRateLimit: 10, SuggestionCacheHours: 6, DefaultDailyQuota: 3}); err != nil {
+	if err := seedSingleton(db, 1, &entities.AIQueueConfig{ID: 1, MaxConcurrent: 4, MaxQueueSize: 20, RequestTimeoutMS: 60000, PerUserRateLimit: 10, SuggestionCacheHours: 6, DefaultDailyQuota: 3, MaxImageResults: 20}); err != nil {
 		return err
 	}
 	// The seed-managed "local-ollama" provider mirrors the runtime env config

@@ -88,6 +88,7 @@
 | per_user_rate_limit | int | questions per minute per user; 0 = unlimited |
 | suggestion_cache_hours | int | hours the AI-composed history suggestions are reused per user before recomposing; 0 = always compose fresh. Editable from the Owner Control Panel (Queue & limits). |
 | default_daily_quota | int | daily AI-usage quota granted to newly registered accounts (password or Google SSO); 0 = unlimited. Default 3. Editable from the Owner Control Panel (Queue & limits); affects only accounts created afterwards. |
+| max_image_results | int | caps image results returned/persisted per web-search ask; 0 = unlimited. Default 20. Only the primary search of a thread fetches images (follow-ups skip). Editable from the Owner Control Panel (Queue & limits). |
 
 ### site_settings (singleton row)
 | Field | Type | Notes |

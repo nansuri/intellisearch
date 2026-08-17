@@ -13,6 +13,11 @@ services:
       REDIS_ADDR: redis:6379
       SEARXNG_BASE_URL: http://searxng:8080
       CRAWLER_BASE_URL: http://crawler:3002
+      UPLOADS_DIR: /uploads
+    volumes:
+      # Uploaded logos/avatars persist across redeploys (the image pre-creates
+      # /uploads owned by the nonroot user; the named volume inherits it).
+      - uploads:/uploads
     ports:
       - "8088:8088"
     depends_on:
@@ -74,3 +79,4 @@ networks:
 
 volumes:
   redis_data:
+  uploads:

@@ -61,21 +61,33 @@ type AskResult struct {
 // AIService runs the full ask pipeline: persist session/messages/usage logs,
 // search the web, deep-read top sources, and synthesize a cited answer.
 type AIService struct {
-	sessions  *repositories.SessionRepository
-	messages  *repositories.MessageRepository
-	usageLogs *repositories.UsageLogRepository
-	providers *repositories.ProviderRepository
-	users     *repositories.UserRepository
-	history   *repositories.SearchHistoryRepository // nil disables recording (tests)
-	search    *SearchService
-	crawl     *CrawlService
-	llm       *LLMService
-	geo       *GeoService
-	crawlTopN int
+	sessions    *repositories.SessionRepository
+	messages    *repositories.MessageRepository
+	usageLogs   *repositories.UsageLogRepository
+	providers   *repositories.ProviderRepository
+	users       *repositories.UserRepository
+	history     *repositories.SearchHistoryRepository // nil disables recording (tests)
+	queueConfig *repositories.QueueConfigRepository  // nil falls back to the default image cap
+	search      *SearchService
+	crawl       *CrawlService
+	llm         *LLMService
+	geo         *GeoService
+	crawlTopN   int
 }
 
-func NewAIService(sessions *repositories.SessionRepository, messages *repositories.MessageRepository, usageLogs *repositories.UsageLogRepository, providers *repositories.ProviderRepository, users *repositories.UserRepository, history *repositories.SearchHistoryRepository, search *SearchService, crawl *CrawlService, llm *LLMService, geo *GeoService, crawlTopN int) *AIService {
-	return &AIService{sessions: sessions, messages: messages, usageLogs: usageLogs, providers: providers, users: users, history: history, search: search, crawl: crawl, llm: llm, geo: geo, crawlTopN: crawlTopN}
+func NewAIService(sessions *repositories.SessionRepository, messages *repositories.MessageRepository, usageLogs *repositories.UsageLogRepository, providers *repositories.ProviderRepository, users *repositories.UserRepository, history *repositories.SearchHistoryRepository, queueConfig *repositories.QueueConfigRepository, search *SearchService, crawl *CrawlService, llm *LLMService, geo *GeoService, crawlTopN int) *AIService {
+	return &AIService{sessions: sessions, messages: messages, usageLogs: usageLogs, providers: providers, users: users, history: history, queueConfig: queueConfig, search: search, crawl: crawl, llm: llm, geo: geo, crawlTopN: crawlTopN}
+}
+
+// maxImageResults returns the admin-configurable cap on image results per
+// search, falling back to 20 when the queue-config row is unavailable.
+func (s *AIService) maxImageResults() int {
+	if s.queueConfig != nil {
+		if config, err := s.queueConfig.Get(); err == nil {
+			return config.MaxImageResults
+		}
+	}
+	return 20
 }
 
 // Answer executes one ask job. It always persists a user message, an assistant
@@ -148,8 +160,10 @@ func (s *AIService) Answer(ctx context.Context, input AskInput) (AskResult, erro
 	} else {
 		var searchQuery string
 		searchQuery, locationNote = BuildLocationContext(ctx, s.geo, query, input.Location)
-		// Search-only mode skips the deep-read (no crawler work).
-		sources, promptSources, images, err = s.collectFromSearch(ctx, searchQuery, assistantMessage.ID, input.Mode != ModeSearch)
+		// Search-only mode skips the deep-read (no crawler work). Follow-up asks
+		// (reusing a session) skip the image search too, so only the primary
+		// search of a thread fetches images.
+		sources, promptSources, images, err = s.collectFromSearch(ctx, searchQuery, assistantMessage.ID, input.Mode != ModeSearch, input.SessionID == nil)
 	}
 	if err != nil {
 		return fail(err)
@@ -255,8 +269,10 @@ func (s *AIService) conversationContext(session entities.ChatSession, currentUse
 // collectFromSearch queries SearXNG (web + images), persists the source cards
 // and image results, and optionally deep-reads the top pages (only for
 // enhanced mode). Search failures degrade gracefully: the LLM still answers,
-// without web sources; an image-search failure never fails the ask.
-func (s *AIService) collectFromSearch(ctx context.Context, query string, messageID uuid.UUID, deepRead bool) ([]SourceItem, []string, []ImageItem, error) {
+// without web sources; an image-search failure never fails the ask. withImages
+// gates the image search (follow-up asks pass false) and the image count is
+// capped by the admin-configurable maxImageResults.
+func (s *AIService) collectFromSearch(ctx context.Context, query string, messageID uuid.UUID, deepRead, withImages bool) ([]SourceItem, []string, []ImageItem, error) {
 	items, err := s.search.Search(ctx, query)
 	if err != nil {
 		return []SourceItem{}, nil, []ImageItem{}, nil
@@ -275,7 +291,10 @@ func (s *AIService) collectFromSearch(ctx context.Context, query string, message
 	if err := s.messages.CreateSources(sources); err != nil {
 		return nil, nil, []ImageItem{}, err
 	}
-	images, imageErr := s.search.SearchImages(ctx, query)
+	if !withImages {
+		return items, promptSources, []ImageItem{}, nil
+	}
+	images, imageErr := s.search.SearchImages(ctx, query, s.maxImageResults())
 	if imageErr != nil {
 		logrus.WithError(imageErr).Warn("image search failed; continuing without images")
 	} else if len(images) > 0 {

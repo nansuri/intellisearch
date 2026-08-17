@@ -54,7 +54,7 @@ func main() {
 	crawlService := services.NewCrawlService(cfg.CrawlerBaseURL, cfg.CrawlerTimeoutMS, crawlJobRepository)
 	llmService := services.NewLLMService(providerRepository, cfg.EncryptionKey)
 	geoService := services.NewGeoService(cfg.NominatimBaseURL, "Intellisearch/1.0", cfg.NominatimTimeoutMS)
-	aiService := services.NewAIService(sessionRepository, messageRepository, usageLogRepository, providerRepository, userRepository, searchHistoryRepository, searchService, crawlService, llmService, geoService, cfg.CrawlTopN)
+	aiService := services.NewAIService(sessionRepository, messageRepository, usageLogRepository, providerRepository, userRepository, searchHistoryRepository, queueConfigRepository, searchService, crawlService, llmService, geoService, cfg.CrawlTopN)
 	aiHandler := handlers.NewAIHandler(aiService, queueConfigRepository, userRepository, usageLogRepository, repositories.NewAnonymousUsageRepository(db), limiter, authService)
 	adminService := services.NewAdminService(providerRepository, queueConfigRepository, repositories.NewSiteRepository(db), cfg.EncryptionKey, cfg.UploadsDir)
 	statsService := services.NewStatsService(usageLogRepository, userRepository, providerRepository, aiHandler)

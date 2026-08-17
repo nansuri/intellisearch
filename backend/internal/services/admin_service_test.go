@@ -101,22 +101,26 @@ func TestAdminUpdateQueueConfigValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	admin := NewAdminService(repositories.NewProviderRepository(db), repositories.NewQueueConfigRepository(db), repositories.NewSiteRepository(db), "k", t.TempDir())
-	if _, err := admin.UpdateQueueConfig(0, 20, 60000, 10, 6, 3); !errors.Is(err, ErrQueueConfigInvalid) {
+	if _, err := admin.UpdateQueueConfig(0, 20, 60000, 10, 6, 3, 20); !errors.Is(err, ErrQueueConfigInvalid) {
 		t.Fatalf("expected ErrQueueConfigInvalid, got %v", err)
 	}
 	// Negative suggestion-cache hours are invalid too.
-	if _, err := admin.UpdateQueueConfig(4, 20, 60000, 10, -1, 3); !errors.Is(err, ErrQueueConfigInvalid) {
+	if _, err := admin.UpdateQueueConfig(4, 20, 60000, 10, -1, 3, 20); !errors.Is(err, ErrQueueConfigInvalid) {
 		t.Fatalf("expected ErrQueueConfigInvalid for negative cache hours, got %v", err)
 	}
 	// Negative default quota is invalid as well.
-	if _, err := admin.UpdateQueueConfig(4, 20, 60000, 10, 6, -1); !errors.Is(err, ErrQueueConfigInvalid) {
+	if _, err := admin.UpdateQueueConfig(4, 20, 60000, 10, 6, -1, 20); !errors.Is(err, ErrQueueConfigInvalid) {
 		t.Fatalf("expected ErrQueueConfigInvalid for negative default quota, got %v", err)
 	}
-	config, err := admin.UpdateQueueConfig(6, 40, 120000, 5, 24, 7)
+	// Negative image-result cap is invalid too.
+	if _, err := admin.UpdateQueueConfig(4, 20, 60000, 10, 6, 3, -1); !errors.Is(err, ErrQueueConfigInvalid) {
+		t.Fatalf("expected ErrQueueConfigInvalid for negative image cap, got %v", err)
+	}
+	config, err := admin.UpdateQueueConfig(6, 40, 120000, 5, 24, 7, 12)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if config.MaxConcurrent != 6 || config.PerUserRateLimit != 5 || config.SuggestionCacheHours != 24 || config.DefaultDailyQuota != 7 {
+	if config.MaxConcurrent != 6 || config.PerUserRateLimit != 5 || config.SuggestionCacheHours != 24 || config.DefaultDailyQuota != 7 || config.MaxImageResults != 12 {
 		t.Fatalf("unexpected config: %#v", config)
 	}
 }

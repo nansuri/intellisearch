@@ -60,6 +60,7 @@ func newAITestEnv(t *testing.T, searchDown bool) (*AIService, *gorm.DB, *int64) 
 		providerRepo,
 		repositories.NewUserRepository(db),
 		repositories.NewSearchHistoryRepository(db),
+		repositories.NewQueueConfigRepository(db),
 		NewSearchService(config.Config{SearXNGBaseURL: searchServer.URL, SearXNGTimeoutMS: 2000}),
 		NewCrawlService(crawlServer.URL, 5000, repositories.NewCrawlJobRepository(db)),
 		NewLLMService(providerRepo, "key"),
@@ -263,5 +264,51 @@ func TestAnswerSearchModeStillRecordsHistory(t *testing.T) {
 	var entries []entities.SearchHistory
 	if err := db.Where("user_id = ?", userID).Find(&entries).Error; err != nil || len(entries) != 1 {
 		t.Fatalf("search mode must record history, got %#v (err=%v)", entries, err)
+	}
+}
+
+// TestAnswerCapsImageResults verifies the admin-configurable maxImageResults
+// bounds how many image results are returned and persisted.
+func TestAnswerCapsImageResults(t *testing.T) {
+	service, db, _ := newAITestEnv(t, false)
+	if err := db.Create(&entities.AIQueueConfig{ID: 1, MaxConcurrent: 4, MaxQueueSize: 20, RequestTimeoutMS: 60000, PerUserRateLimit: 10, MaxImageResults: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.Answer(context.Background(), AskInput{Query: "capped images"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Images) != 1 || result.Images[0].Position != 1 {
+		t.Fatalf("expected exactly 1 image (config cap), got %#v", result.Images)
+	}
+	var count int64
+	if err := db.Model(&entities.ImageResult{}).Where("message_id = ?", result.MessageID).Count(&count).Error; err != nil || count != 1 {
+		t.Fatalf("expected 1 persisted image result, got %d (err=%v)", count, err)
+	}
+}
+
+// TestAnswerSkipsImagesOnFollowUp verifies follow-up asks (reusing a session)
+// do not fetch or persist a second set of images — only the primary search of
+// a thread gets the image grid.
+func TestAnswerSkipsImagesOnFollowUp(t *testing.T) {
+	service, db, _ := newAITestEnv(t, false)
+	first, err := service.Answer(context.Background(), AskInput{Query: "primary search"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Images) != 2 {
+		t.Fatalf("primary search should return images, got %d", len(first.Images))
+	}
+	sessionID := first.SessionID
+	followUp, err := service.Answer(context.Background(), AskInput{Query: "follow-up question", SessionID: &sessionID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(followUp.Images) != 0 {
+		t.Fatalf("follow-up asks must not return images, got %d", len(followUp.Images))
+	}
+	var count int64
+	if err := db.Model(&entities.ImageResult{}).Where("message_id = ?", followUp.MessageID).Count(&count).Error; err != nil || count != 0 {
+		t.Fatalf("follow-up must not persist images, got %d (err=%v)", count, err)
 	}
 }
