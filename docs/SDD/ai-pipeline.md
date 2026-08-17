@@ -22,10 +22,12 @@ A single **AI handler** is the only entry point for all AI work. All AI requests
    - Search listings via the **Search service** → self-hosted SearXNG container (`GET http://searxng:8080/search?q=…&format=json`, backend-to-backend over the Docker network).
    - For each needed source, the **Crawler service** (Puppeteer/Playwright) fetches the page content for full-text grounding.
    - URL submissions skip search and use the crawler directly.
-4. **Synthesize** — the LLM (Ollama local / OpenAI-compatible provider) produces a cited answer from the query + crawled content.
+4. **Synthesize** — the LLM (Ollama local, OpenAI-compatible, Pollinations.ai, or Hugging Face provider) produces a cited answer from the query + crawled content.
 5. **Persist & return** — write session/message/`search_results`, kill the crawl job, return the envelope to the UI.
 
 ## 4. Ollama / LLM Requirements
 
 - Local Ollama (privacy-first; no user data leaves the server).
-- Model and parameters are configured via the AI providers table (provider_type `ollama` or `openai_compatible`; `base_url`, `model`, `parameters`), and the active provider is toggled in the control panel without redeploying.
+- Model and parameters are configured via the AI providers table (provider_type `ollama`, `openai_compatible`, `pollinations`, or `huggingface`; `base_url`, `model`, `parameters`), and the active provider is toggled in the control panel without redeploying.
+- **Pollinations.ai** (keyless): `POST {base}/openai` with the OpenAI wire format; base URL `https://text.pollinations.ai`, e.g. model `openai`.
+- **Hugging Face** (Bearer key): `POST {base}/chat/completions` with the OpenAI wire format; base URL `https://router.huggingface.co/v1`, e.g. model `Qwen/Qwen3-70B-Instruct`.

@@ -241,8 +241,19 @@ func validProvider(name, providerType, baseURL, model string) bool {
 		return false
 	}
 	return strings.TrimSpace(name) != "" &&
-		(providerType == "ollama" || providerType == "openai_compatible") &&
+		isSupportedProviderType(providerType) &&
 		strings.TrimSpace(model) != ""
+}
+
+// isSupportedProviderType lists the provider backends the LLM service knows
+// how to talk to. Keep in sync with openAIEndpoint in llm_service.go.
+func isSupportedProviderType(providerType string) bool {
+	switch providerType {
+	case "ollama", "openai_compatible", "pollinations", "huggingface":
+		return true
+	default:
+		return false
+	}
 }
 
 func optionalEncrypt(apiKey string, key []byte) (*string, error) {

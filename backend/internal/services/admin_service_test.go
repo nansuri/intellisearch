@@ -45,6 +45,28 @@ func TestAdminCreateProviderValidates(t *testing.T) {
 	}
 }
 
+func TestAdminCreateProviderAcceptsNewProviderTypes(t *testing.T) {
+	db := newTestDB(t)
+	admin := NewAdminService(repositories.NewProviderRepository(db), repositories.NewQueueConfigRepository(db), repositories.NewSiteRepository(db), "k", t.TempDir())
+	for _, tc := range []struct {
+		name         string
+		providerType string
+		baseURL      string
+		model        string
+	}{
+		{"pollinations", "pollinations", "https://text.pollinations.ai", "openai"},
+		{"huggingface", "huggingface", "https://router.huggingface.co/v1", "Qwen/Qwen3-70B-Instruct"},
+	} {
+		provider, err := admin.CreateProvider(tc.name, tc.providerType, tc.baseURL, tc.model, nil, "", false)
+		if err != nil {
+			t.Fatalf("expected %s to be accepted, got %v", tc.providerType, err)
+		}
+		if provider.ProviderType != tc.providerType {
+			t.Fatalf("unexpected provider type %q", provider.ProviderType)
+		}
+	}
+}
+
 func TestAdminUpdateQueueConfigValidation(t *testing.T) {
 	db := newTestDB(t)
 	if err := db.Create(&entities.AIQueueConfig{ID: 1, MaxConcurrent: 4, MaxQueueSize: 20, RequestTimeoutMS: 60000, PerUserRateLimit: 10}).Error; err != nil {

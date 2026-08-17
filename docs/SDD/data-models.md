@@ -55,7 +55,7 @@
 | --- | --- | --- |
 | id | UUID (PK) | |
 | name | varchar | e.g., "local-ollama" |
-| provider_type | enum (provider_type) | ollama / openai_compatible |
+| provider_type | enum (provider_type) | ollama / openai_compatible / pollinations / huggingface |
 | base_url | varchar | e.g., http://ollama:11434 |
 | model | varchar | |
 | parameters | jsonb | temperature, max_tokens, context window |
@@ -126,7 +126,7 @@
 - **message_role:** `system`, `user`, `assistant`
 - **message_status:** `queued`, `streaming`, `completed`, `failed`
 - **crawl_status:** `queued`, `running`, `completed`, `failed`, `blocked`
-- **provider_type:** `ollama`, `openai_compatible`
+- **provider_type:** `ollama`, `openai_compatible`, `pollinations`, `huggingface`
 
 ## 3. Caching & Runtime Data (Redis)
 

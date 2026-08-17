@@ -53,15 +53,31 @@ func (s *LLMService) Generate(ctx context.Context, system string, messages []Cha
 }
 
 // GenerateWith runs the chat against an explicitly selected provider.
+//
+// Supported provider types:
+//   - ollama            POST {base}/api/chat
+//   - openai_compatible POST {base}/v1/chat/completions
+//   - pollinations      POST {base}/openai            (OpenAI-compatible, keyless)
+//   - huggingface       POST {base}/chat/completions  (OpenAI-compatible, Bearer key)
 func (s *LLMService) GenerateWith(ctx context.Context, provider entities.AIProvider, system string, messages []ChatMessage, opts GenerateOptions) (string, error) {
 	chat := []ChatMessage{{Role: "system", Content: system}}
 	chat = append(chat, messages...)
 	var body []byte
 	var requestURL string
 	var err error
-	switch provider.ProviderType {
-	case "openai_compatible":
-		requestURL = strings.TrimRight(provider.BaseURL, "/") + "/v1/chat/completions"
+	if provider.ProviderType == "ollama" {
+		requestURL = strings.TrimRight(provider.BaseURL, "/") + "/api/chat"
+		payload := map[string]any{"model": provider.Model, "messages": chat, "stream": false}
+		if opts.Temperature != 0 {
+			payload["options"] = map[string]any{"temperature": opts.Temperature}
+		}
+		body, err = json.Marshal(payload)
+	} else {
+		suffix, ok := openAIEndpoint(provider.ProviderType)
+		if !ok {
+			return "", ErrAIProviderError
+		}
+		requestURL = strings.TrimRight(provider.BaseURL, "/") + suffix
 		payload := map[string]any{"model": provider.Model, "messages": chat}
 		if opts.Temperature != 0 {
 			payload["temperature"] = opts.Temperature
@@ -70,15 +86,6 @@ func (s *LLMService) GenerateWith(ctx context.Context, provider entities.AIProvi
 			payload["max_tokens"] = opts.MaxTokens
 		}
 		body, err = json.Marshal(payload)
-	case "ollama":
-		requestURL = strings.TrimRight(provider.BaseURL, "/") + "/api/chat"
-		payload := map[string]any{"model": provider.Model, "messages": chat, "stream": false}
-		if opts.Temperature != 0 {
-			payload["options"] = map[string]any{"temperature": opts.Temperature}
-		}
-		body, err = json.Marshal(payload)
-	default:
-		return "", ErrAIProviderError
 	}
 	if err != nil {
 		return "", ErrAIProviderError
@@ -108,7 +115,17 @@ func (s *LLMService) GenerateWith(ctx context.Context, provider entities.AIProvi
 		return "", fmt.Errorf("%w: status %d", ErrAIProviderError, response.StatusCode)
 	}
 	var content string
-	if provider.ProviderType == "openai_compatible" {
+	if provider.ProviderType == "ollama" {
+		var payload struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		}
+		if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+			return "", ErrAIProviderError
+		}
+		content = payload.Message.Content
+	} else {
 		var payload struct {
 			Choices []struct {
 				Message struct {
@@ -123,16 +140,21 @@ func (s *LLMService) GenerateWith(ctx context.Context, provider entities.AIProvi
 			return "", ErrAIProviderError
 		}
 		content = payload.Choices[0].Message.Content
-	} else {
-		var payload struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		}
-		if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
-			return "", ErrAIProviderError
-		}
-		content = payload.Message.Content
 	}
 	return strings.TrimSpace(content), nil
+}
+
+// openAIEndpoint returns the chat-completions path for every provider type
+// that speaks the OpenAI wire format (payload + response shape).
+func openAIEndpoint(providerType string) (string, bool) {
+	switch providerType {
+	case "openai_compatible":
+		return "/v1/chat/completions", true
+	case "pollinations":
+		return "/openai", true
+	case "huggingface":
+		return "/chat/completions", true
+	default:
+		return "", false
+	}
 }

@@ -36,7 +36,12 @@ async function setActive(p: Provider) {
   try { await updateProvider(p.id, { name: p.name, providerType: p.providerType, baseUrl: p.baseUrl, model: p.model, parameters: p.parameters, isActive: true }); toast.success(`${p.name} is now active.`); load() }
   catch (e) { toast.error((e as Error).message) }
 }
-const typeLabel: Record<string, { label: string; tone: string }> = { ollama: { label: 'Ollama', tone: 'success' }, openai_compatible: { label: 'OpenAI-compatible', tone: 'accent' } }
+const typeLabel: Record<string, { label: string; tone: string }> = {
+  ollama: { label: 'Ollama', tone: 'success' },
+  openai_compatible: { label: 'OpenAI-compatible', tone: 'accent' },
+  pollinations: { label: 'Pollinations.ai', tone: 'accent' },
+  huggingface: { label: 'Hugging Face', tone: 'accent' },
+}
 onMounted(load)
 </script>
 <template>

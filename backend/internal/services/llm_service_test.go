@@ -78,6 +78,80 @@ func TestGenerateWithOpenAICompatible(t *testing.T) {
 	}
 }
 
+func TestGenerateWithPollinations(t *testing.T) {
+	var received map[string]any
+	var authHeader string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/openai" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		authHeader = r.Header.Get("Authorization")
+		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"pollinations answer"}}]}`))
+	}))
+	defer server.Close()
+
+	service := NewLLMService(nil, "key")
+	// Pollinations is keyless — no Authorization header must be sent.
+	provider := entities.AIProvider{ProviderType: "pollinations", BaseURL: server.URL, Model: "openai"}
+	answer, err := service.GenerateWith(context.Background(), provider, "system", []ChatMessage{{Role: "user", Content: "hi"}}, GenerateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if answer != "pollinations answer" {
+		t.Fatalf("unexpected answer %q", answer)
+	}
+	if authHeader != "" {
+		t.Fatalf("expected no auth header for keyless provider, got %q", authHeader)
+	}
+	if received["model"] != "openai" {
+		t.Fatalf("unexpected model %#v", received["model"])
+	}
+}
+
+func TestGenerateWithHuggingFace(t *testing.T) {
+	var received map[string]any
+	var authHeader string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/chat/completions" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		authHeader = r.Header.Get("Authorization")
+		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"hf answer"}}]}`))
+	}))
+	defer server.Close()
+
+	sealed, err := EncryptSecret("hf_test_token", []byte("key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewLLMService(nil, "key")
+	provider := entities.AIProvider{ProviderType: "huggingface", BaseURL: server.URL, Model: "Qwen/Qwen3-70B-Instruct", APIKeyEncrypted: &sealed}
+	answer, err := service.GenerateWith(context.Background(), provider, "system", []ChatMessage{{Role: "user", Content: "hi"}}, GenerateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if answer != "hf answer" {
+		t.Fatalf("unexpected answer %q", answer)
+	}
+	if authHeader != "Bearer hf_test_token" {
+		t.Fatalf("unexpected auth header %q", authHeader)
+	}
+}
+
+func TestGenerateWithUnknownProviderType(t *testing.T) {
+	service := NewLLMService(nil, "key")
+	provider := entities.AIProvider{ProviderType: "azure", BaseURL: "https://example.com", Model: "m"}
+	if _, err := service.GenerateWith(context.Background(), provider, "s", nil, GenerateOptions{}); !errors.Is(err, ErrAIProviderError) {
+		t.Fatalf("expected ErrAIProviderError, got %v", err)
+	}
+}
+
 func TestGenerateWithMapsErrors(t *testing.T) {
 	service := NewLLMService(nil, "key")
 	provider := entities.AIProvider{ProviderType: "ollama", BaseURL: "http://127.0.0.1:1", Model: "m"}

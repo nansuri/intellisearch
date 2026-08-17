@@ -56,7 +56,8 @@ export type MeResponse = User & { usage: { usedToday: number; quota: number; rem
 export type LoginResponse = { token: string; user: User }
 export type UsersPage = { users: User[]; total: number; page: number; pageSize: number }
 
-export type Provider = { id: string; name: string; providerType: 'ollama' | 'openai_compatible'; baseUrl: string; model: string; parameters: Record<string, unknown> | null; isActive: boolean }
+export type ProviderType = 'ollama' | 'openai_compatible' | 'pollinations' | 'huggingface'
+export type Provider = { id: string; name: string; providerType: ProviderType; baseUrl: string; model: string; parameters: Record<string, unknown> | null; isActive: boolean }
 export type QueueConfig = { maxConcurrent: number; maxQueueSize: number; requestTimeoutMs: number; perUserRateLimit: number }
 export type TopQuery = { query: string; count: number }
 export type PerUserUsage = { userId: string; name: string; email: string; count: number }
