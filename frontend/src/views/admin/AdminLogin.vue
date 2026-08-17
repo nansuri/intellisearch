@@ -18,7 +18,7 @@ async function submit() {
   error.value = ''
   try {
     const user = await auth.login(email.value, password.value)
-    if (user.role !== 'super_owner') { router.push('/account'); return }
+    if (user.role !== 'super_owner') { router.push('/'); return }
     toast.success('Welcome back.')
     router.push('/admin')
   } catch (e) { error.value = (e as Error).message }

@@ -350,3 +350,29 @@ func TestMeReturnsUsage(t *testing.T) {
 		t.Fatalf("me endpoint failed: %d %s", status, payload)
 	}
 }
+
+func TestGoogleSSOEndpoints(t *testing.T) {
+	server, _ := adminTestMux(t)
+
+	// /site advertises Google SSO as disabled when no credentials are configured
+	// (the test mux builds its AuthService without Google env vars).
+	status, payload := call(t, server, http.MethodGet, "/api/v1/site", "", nil)
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"googleSsoEnabled":false`)) {
+		t.Fatalf("site endpoint did not report google SSO disabled: %d %s", status, payload)
+	}
+
+	// The OAuth start endpoint refuses with AUTH01003 instead of redirecting.
+	request, err := http.NewRequest(http.MethodGet, server.URL+"/api/v1/auth/google", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	payload, _ = io.ReadAll(response.Body)
+	if response.StatusCode != http.StatusServiceUnavailable || !bytes.Contains(payload, []byte(`"errorCode":"AUTH01003"`)) {
+		t.Fatalf("google start without credentials: expected 503 AUTH01003, got %d %s", response.StatusCode, payload)
+	}
+}

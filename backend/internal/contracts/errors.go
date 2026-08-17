@@ -6,6 +6,9 @@ const AUTH01001 = "AUTH01001"
 // AUTH01002 indicates an invalid or expired session.
 const AUTH01002 = "AUTH01002"
 
+// AUTH01003 indicates that Google sign-in is unavailable or failed.
+const AUTH01003 = "AUTH01003"
+
 // AUTH02001 indicates that super-owner access is required.
 const AUTH02001 = "AUTH02001"
 

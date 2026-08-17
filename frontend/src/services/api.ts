@@ -44,7 +44,7 @@ export async function upload<T>(path: string, field: string, file: File): Promis
   return body.data
 }
 
-export type SiteSettings = { siteName: string; logoUrl: string | null; faviconUrl: string | null; tagline: string | null }
+export type SiteSettings = { siteName: string; logoUrl: string | null; faviconUrl: string | null; tagline: string | null; googleSsoEnabled?: boolean }
 export type Source = { position: number; title: string; url: string; domain: string; snippet: string }
 export type GeoLocation = { latitude: number; longitude: number; accuracy?: number }
 export type AskResult = { sessionId: string; messageId: string; answer: string; sources: Source[] }

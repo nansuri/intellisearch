@@ -16,6 +16,13 @@ export const useAuthStore = defineStore('auth', {
         return user
       } finally { this.loading = false }
     },
+    // setSession completes an OAuth (Google) sign-in: the backend already issued
+    // the JWT and we just need to persist it and load the profile.
+    async setSession(token: string) {
+      this.setToken(token)
+      this.user = await getMe()
+      return this.user
+    },
     async restore() {
       if (!this.token) return
       try { this.user = await getMe() } catch (error) {

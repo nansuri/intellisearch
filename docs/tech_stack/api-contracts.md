@@ -13,8 +13,10 @@ Every API response uses:
 | Method | Path | Access | Description |
 | --- | --- | --- | --- |
 | GET | `/health` | public | Service health envelope. |
-| GET | `/api/v1/site` | public | Reads the public site identity from the seeded `site_settings` database row. |
+| GET | `/api/v1/site` | public | Reads the public site identity from the seeded `site_settings` database row plus `googleSsoEnabled` (whether Google SSO credentials are configured, so the UI can hide the button when disabled). |
 | POST | `/api/v1/auth/login` | public | Validates an active account and returns a signed JWT plus the safe user profile. Serves both the general-user sign-in page (`/login`) and the Super Owner control-panel sign-in page (`/admin/login`); role checks happen in the frontend flow and on every admin route. |
+| GET | `/api/v1/auth/google` | public | Starts Google SSO: redirects the browser to Google's OAuth consent screen (authorization-code flow) with a CSRF `state` value stored in an httpOnly cookie. Returns `AUTH01003` (503) when Google credentials are not configured. |
+| GET | `/api/v1/auth/google/callback` | public | Google redirects here after consent. Verifies the `state` cookie, exchanges the code for a Google profile, finds or creates the user (new accounts become `general_user` with no usable password), issues the app JWT, and redirects the browser to `{FRONTEND_ORIGIN}/auth/callback?token=…&name=…`. On failure it redirects to `/login?error=…` instead of returning an envelope. |
 | POST | `/api/v1/auth/logout` | Super Owner | Confirms client-side session disposal. |
 | GET | `/api/v1/me` | user | Returns the current user's safe profile. |
 | PATCH | `/api/v1/me` | user | Updates the current user's name and email. |
@@ -42,7 +44,7 @@ Every API response uses:
 | POST | `/api/v1/admin/site-settings/favicon` | Super Owner | Multipart upload of the site favicon (JPG/PNG/GIF/WebP, ≤ 2 MB; returns `{ faviconUrl }`). The browser tab icon updates immediately. |
 | DELETE | `/api/v1/admin/site-settings/favicon` | Super Owner | Removes the favicon so browsers fall back to the bundled default SVG (returns `{ faviconUrl: null }`). |
 
-Error-code constants are defined in `backend/internal/contracts/errors.go` and follow `<FEATURE><SUBSET><ERROR>` (e.g. `AISY02001` queue full, `AISY02002` rate limited, `AISY02003` daily quota exceeded, `AISY03002` URL blocked, `AISY03003` invalid URL, `AISY03004` crawl failed, `AISY01001/2/3` provider unavailable/timeout/error). Admin panel errors use `ADMN01001` (user ops), `ADMN02001` (statistics), `ADMN03001/2` (providers), `ADMN04001` (queue), `ADMN05001/2` (site settings/logo), `ADMN05003` (favicon upload).
+Error-code constants are defined in `backend/internal/contracts/errors.go` and follow `<FEATURE><SUBSET><ERROR>` (e.g. `AISY02001` queue full, `AISY02002` rate limited, `AISY02003` daily quota exceeded, `AISY03002` URL blocked, `AISY03003` invalid URL, `AISY03004` crawl failed, `AISY01001/2/3` provider unavailable/timeout/error). Auth uses `AUTH01001` (invalid credentials), `AUTH01002` (invalid/expired session), `AUTH01003` (Google sign-in unavailable/failed), `AUTH02001` (super-owner required). Admin panel errors use `ADMN01001` (user ops), `ADMN02001` (statistics), `ADMN03001/2` (providers), `ADMN04001` (queue), `ADMN05001/2` (site settings/logo), `ADMN05003` (favicon upload).
 
 ### AI pipeline behavior
 

@@ -26,9 +26,17 @@ func New(corsOrigins, uploadsDir string, siteService *services.SiteService, auth
 			middleware.JSON(c, http.StatusServiceUnavailable, contracts.Fail(contracts.SITE01001, "Site settings are temporarily unavailable."))
 			return
 		}
-		middleware.JSON(c, http.StatusOK, contracts.OK(site))
+		middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{
+			"siteName":         site.SiteName,
+			"logoUrl":          site.LogoURL,
+			"faviconUrl":       site.FaviconURL,
+			"tagline":          site.Tagline,
+			"googleSsoEnabled": authService.GoogleConfigured(),
+		}))
 	})
 	v1.POST("/auth/login", authHandler.Login)
+	v1.GET("/auth/google", authHandler.GoogleStart)
+	v1.GET("/auth/google/callback", authHandler.GoogleCallback)
 	v1.POST("/ask", aiHandler.Ask)
 	v1.POST("/ask/url", aiHandler.AskURL)
 	v1.GET("/sessions/:id", sessionHandler.Get)

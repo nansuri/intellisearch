@@ -4,6 +4,7 @@ import MainPage from '../views/MainPage.vue'
 import ResultPage from '../views/ResultPage.vue'
 import AccountSettings from '../views/AccountSettings.vue'
 import LoginView from '../views/LoginView.vue'
+import AuthCallback from '../views/AuthCallback.vue'
 
 const ControlPanel = () => import('../views/admin/ControlPanel.vue')
 
@@ -12,6 +13,7 @@ const routes = [
   { path: '/search', component: ResultPage },
   { path: '/account', component: AccountSettings, meta: { requiresAuth: true } },
   { path: '/login', component: LoginView, meta: { publicAuth: true } },
+  { path: '/auth/callback', component: AuthCallback, meta: { publicCallback: true } },
   { path: '/admin/login', component: () => import('../views/admin/AdminLogin.vue'), meta: { publicAdmin: true } },
   {
     path: '/admin',
@@ -37,16 +39,29 @@ export const router = createRouter({ history: createWebHistory(), routes })
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
-  if (!auth.token) await auth.restore()
+  // Restore the session on hard refresh: the token survives in localStorage but
+  // the user object is only in memory, so it must be refetched. Previously this
+  // only ran when the token was missing, which is why a refresh appeared to log
+  // the user out.
+  if (auth.token && !auth.user) await auth.restore()
+  if (to.meta.publicCallback) return true
   if (to.meta.publicAuth || to.meta.publicAdmin) {
-    if (auth.isAuthed && auth.user) return { path: auth.user.role === 'super_owner' ? '/admin' : '/account' }
+    if (auth.isAuthed && auth.user) {
+      if (to.meta.publicAdmin && auth.user.role === 'super_owner') return { path: '/admin' }
+      return { path: '/' }
+    }
     return true
   }
   if (to.meta.requiresAdmin) {
     if (!auth.isAuthed) return { path: '/admin/login' }
     if (!auth.user) await auth.restore()
-    if (!auth.user || auth.user.role !== 'super_owner') return { path: '/account' }
+    if (!auth.user || auth.user.role !== 'super_owner') return { path: '/' }
     return true
+  }
+  if (to.meta.requiresAuth) {
+    if (!auth.isAuthed) return { path: '/login' }
+    if (!auth.user) await auth.restore()
+    if (!auth.isAuthed) return { path: '/login' }
   }
   return true
 })

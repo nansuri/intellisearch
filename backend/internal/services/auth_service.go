@@ -1,15 +1,21 @@
 package services
 
 import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
+
 	"intellisearch/internal/config"
 	"intellisearch/internal/models/entities"
 	"intellisearch/internal/repositories"
-	"errors"
-	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
-	"strings"
-	"time"
 )
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
@@ -20,9 +26,16 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 type AuthService struct {
-	users  *repositories.UserRepository
-	secret []byte
-	ttl    time.Duration
+	users              *repositories.UserRepository
+	secret             []byte
+	ttl                time.Duration
+	googleClientID     string
+	googleClientSecret string
+	googleRedirectURL  string
+	frontendOrigin     string
+	httpClient         *http.Client
+	googleTokenURL     string
+	googleUserInfoURL  string
 }
 
 func NewAuthService(users *repositories.UserRepository, cfg config.Config) *AuthService {
@@ -30,7 +43,140 @@ func NewAuthService(users *repositories.UserRepository, cfg config.Config) *Auth
 	if ttl <= 0 {
 		ttl = 24 * time.Hour
 	}
-	return &AuthService{users: users, secret: []byte(cfg.JWTSecret), ttl: ttl}
+	return &AuthService{
+		users:              users,
+		secret:             []byte(cfg.JWTSecret),
+		ttl:                ttl,
+		googleClientID:     cfg.GoogleClientID,
+		googleClientSecret: cfg.GoogleClientSecret,
+		googleRedirectURL:  cfg.GoogleRedirectURL,
+		frontendOrigin:     cfg.FrontendOrigin,
+		httpClient:         &http.Client{Timeout: 10 * time.Second},
+		googleTokenURL:     "https://oauth2.googleapis.com/token",
+		googleUserInfoURL:  "https://www.googleapis.com/oauth2/v2/userinfo",
+	}
+}
+
+// GoogleConfigured reports whether Google SSO credentials are present.
+func (s *AuthService) GoogleConfigured() bool {
+	return s.googleClientID != "" && s.googleClientSecret != "" && s.googleRedirectURL != ""
+}
+
+// FrontendOrigin returns the configured origin used to redirect the browser
+// back after OAuth completes.
+func (s *AuthService) FrontendOrigin() string {
+	if s.frontendOrigin == "" {
+		return "http://localhost:5173"
+	}
+	return s.frontendOrigin
+}
+
+// GoogleAuthURL builds the Google OAuth authorization URL for the given CSRF
+// state value. The state round-trips through Google so the callback can verify
+// the flow started on our side.
+func (s *AuthService) GoogleAuthURL(state string) string {
+	params := url.Values{}
+	params.Set("client_id", s.googleClientID)
+	params.Set("redirect_uri", s.googleRedirectURL)
+	params.Set("response_type", "code")
+	params.Set("scope", "openid email profile")
+	params.Set("access_type", "online")
+	params.Set("prompt", "select_account")
+	params.Set("state", state)
+	return "https://accounts.google.com/o/oauth2/v2/auth?" + params.Encode()
+}
+
+// GoogleCallback exchanges the authorization code for a Google identity,
+// finds or creates the matching user, and issues an app JWT.
+func (s *AuthService) GoogleCallback(code, state, expectedState string) (string, entities.User, error) {
+	if !s.GoogleConfigured() {
+		return "", entities.User{}, ErrGoogleUnavailable
+	}
+	if state == "" || state != expectedState {
+		return "", entities.User{}, ErrGoogleUnavailable
+	}
+	profile, err := s.fetchGoogleProfile(code)
+	if err != nil {
+		return "", entities.User{}, err
+	}
+	email := strings.ToLower(strings.TrimSpace(profile.Email))
+	if email == "" {
+		return "", entities.User{}, ErrGoogleUnavailable
+	}
+	user, err := s.users.ByEmail(email)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		name := strings.TrimSpace(profile.Name)
+		if name == "" {
+			name = email
+		}
+		// New Google users have no password; a random hash keeps the column
+		// non-empty while making password login impossible for the account.
+		hash, hashErr := bcrypt.GenerateFromPassword([]byte(RandomToken(32)), bcrypt.DefaultCost)
+		if hashErr != nil {
+			return "", entities.User{}, hashErr
+		}
+		user = entities.User{
+			ID: uuid.New(), Name: name, Email: email, PasswordHash: string(hash),
+			Role: entities.RoleGeneralUser, Status: entities.StatusActive,
+			CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+		}
+		if profile.Picture != "" {
+			avatar := profile.Picture
+			user.AvatarURL = &avatar
+		}
+		if err := s.users.Create(&user); err != nil {
+			return "", entities.User{}, err
+		}
+	} else if err != nil {
+		return "", entities.User{}, err
+	} else if user.Status != entities.StatusActive {
+		return "", entities.User{}, ErrInvalidCredentials
+	}
+	now := time.Now().UTC()
+	user.LastLoginAt = &now
+	if err := s.users.Save(&user); err != nil {
+		return "", entities.User{}, err
+	}
+	claims := Claims{UserID: user.ID.String(), Role: user.Role, RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(now.Add(s.ttl)), IssuedAt: jwt.NewNumericDate(now)}}
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.secret)
+	return token, user, err
+}
+
+// fetchGoogleProfile exchanges the authorization code for an access token and
+// reads the user's Google profile (email, name, picture).
+func (s *AuthService) fetchGoogleProfile(code string) (googleProfile, error) {
+	form := url.Values{}
+	form.Set("code", code)
+	form.Set("client_id", s.googleClientID)
+	form.Set("client_secret", s.googleClientSecret)
+	form.Set("redirect_uri", s.googleRedirectURL)
+	form.Set("grant_type", "authorization_code")
+	tokenResponse, err := s.httpClient.PostForm(s.googleTokenURL, form)
+	if err != nil {
+		return googleProfile{}, ErrGoogleUnavailable
+	}
+	defer tokenResponse.Body.Close()
+	var token struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.NewDecoder(tokenResponse.Body).Decode(&token); err != nil || token.AccessToken == "" {
+		return googleProfile{}, ErrGoogleUnavailable
+	}
+	req, err := http.NewRequest(http.MethodGet, s.googleUserInfoURL, nil)
+	if err != nil {
+		return googleProfile{}, ErrGoogleUnavailable
+	}
+	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	response, err := s.httpClient.Do(req)
+	if err != nil {
+		return googleProfile{}, ErrGoogleUnavailable
+	}
+	defer response.Body.Close()
+	var profile googleProfile
+	if err := json.NewDecoder(response.Body).Decode(&profile); err != nil {
+		return googleProfile{}, ErrGoogleUnavailable
+	}
+	return profile, nil
 }
 
 func (s *AuthService) Login(email, password string) (string, entities.User, error) {

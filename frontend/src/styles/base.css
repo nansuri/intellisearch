@@ -6,7 +6,7 @@ button, a, input, select { -webkit-tap-highlight-color: transparent; }
 button { color: inherit; }
 a { color: inherit; }
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
-.page-enter-active, .page-leave-active { transition: opacity .18s ease, transform .18s ease; }
-.page-enter-from { opacity: 0; transform: translateY(10px); }
-.page-leave-to { opacity: 0; transform: translateY(-6px); }
+.page-enter-active, .page-leave-active { transition: opacity .22s ease, transform .22s cubic-bezier(.22, .9, .28, 1), filter .22s ease; will-change: opacity, transform, filter; }
+.page-enter-from { opacity: 0; transform: translateY(14px) scale(.992); filter: blur(4px); }
+.page-leave-to { opacity: 0; transform: translateY(-8px) scale(.996); filter: blur(3px); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }

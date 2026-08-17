@@ -16,7 +16,8 @@ This document is the implementation truth for the repository. The PRD and SDD re
 - Main page simplified to a Google-like centered search entry point.
 - **Result page wired to the real AI API:** asks the query on load, renders the cited answer + numbered sources, follow-up thread (same `sessionId`), skeleton loading, friendly error banner with retry, and a URL-read box in the no-sources state.
 - **Account settings wired to the API:** sign-in-gated profile view (name/email edit, avatar upload with initials fallback), daily AI usage meter with quota, session tab with logout and (for Super Owners) a control-panel shortcut.
-- **Separate general-user sign-in page (`/login`):** branded public-theme login for any active account that routes to `/account` (or `/admin` for Super Owners); all general-user sign-in entry points (account menu, account settings) point here instead of the control-panel gate. `/admin/login` stays Super Owner–only and links back to the general sign-in page.
+- **Separate general-user sign-in page (`/login`):** branded public-theme login for any active account that routes to the **main page** after signing in (previously `/account`); all general-user sign-in entry points (account menu, account settings) point here instead of the control-panel gate. `/admin/login` stays Super Owner–only and links back to the general sign-in page.
+- **Google SSO (optional):** `GET /api/v1/auth/google` starts the OAuth authorization-code flow (CSRF `state` in an httpOnly cookie); the callback exchanges the code, finds-or-creates the user, issues the app JWT, and redirects to `/auth/callback?token=…` which completes the session and lands on the main page. New Google accounts become `general_user` with no usable password; disabled when `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` are unset (`AUTH01003`).
 
 ### Frontend — Owner Control Panel (SDD M4)
 
@@ -28,6 +29,8 @@ This document is the implementation truth for the repository. The PRD and SDD re
 - **Queue & limits** (`/admin/ai/queue`): edit `max_concurrent`, `max_queue_size`, `request_timeout_ms`, `per_user_rate_limit` with immediate apply — no redeploy.
 - **Branding** (`/admin/branding/identity`, `/admin/branding/logo`): site name/tagline editing with live preview, logo upload with drag & drop, and **logo removal (delete → falls back to the default initials mark)**; all apply to the public main page immediately (site store refresh).
 - Frontend auth store (JWT in localStorage, `restore()` on boot, 401 expiry handling), admin router guards, typed API client with friendly per-error-code messages, and a toast notification system reused across the panel.
+- **Session persistence on hard refresh:** the router guard restores the user whenever a token exists but the in-memory profile is missing, so a reload no longer appears to log the user out.
+- **Login UX:** refreshed sign-in page with a Google SSO button (shown only when the backend reports `googleSsoEnabled`), success animation before redirect, and post-login redirect to the **main page** for all users (Super Owners using `/admin/login` still land in the panel). Page transitions upgraded to a fade + slide + blur.
 
 ### Backend foundation
 
