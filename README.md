@@ -70,3 +70,7 @@ deploy-prod.sh           production deployment
 `deploy-prod.sh` validates the production compose config, builds the images, starts the stack, and verifies the API `/health` endpoint reports `ok` before declaring success. It loads `.env.production` (override with `DEPLOY_ENV_FILE=/path/to/env`) and injects it into the API container (`env_file: ["${ENV_FILE:-.env}"]`), so the running stack gets the production secrets — never the dev `.env`.
 
 The stack deploys only its own services (API, frontend, Redis, SearXNG, crawler). PostgreSQL and Ollama are **reused from existing containers**: the API attaches to the external `SHARED_DB_NETWORK` network and connects to the existing DB container by its network alias (`DB_HOST`), and attaches to the external `OLLAMA_NETWORK` (e.g. the Open WebUI network) to reach an existing Ollama by service name. Secrets live only in environment variables / env files and are never committed to the repo.
+
+## License
+
+Released under the [Apache License 2.0](LICENSE.md).
