@@ -16,6 +16,9 @@
   padding: 0;
   text-align: center;
 }
+/* The title + ask box are one centered unit; the history/suggestions panel
+   lives outside it so its presence never shifts them. */
+.hero-core { width: 100%; display: flex; flex-direction: column; align-items: center; }
 .eyebrow, .section-label { color: var(--color-primary); font-size: .68rem; font-weight: 760; letter-spacing: .11em; text-transform: uppercase; }
 .eyebrow { display: flex; align-items: center; gap: 8px; margin-bottom: 22px; }
 .eyebrow span { width: 6px; height: 6px; border-radius: 50%; background: var(--color-primary); }

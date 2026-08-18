@@ -90,8 +90,10 @@ onMounted(() => {
   <main class="page-shell main-page">
     <AppHeader />
     <section class="hero">
-      <div class="hero-brand"><h1>{{ site.settings?.siteName || 'Intellisearch' }}</h1></div>
-      <AskBox ref="askBox" :show-prompt="false" mode-toggle :mode="mode" :helper-text="locating ? 'Getting your location for nearby results…' : ''" @update:mode="mode = $event" @submit="onAsk" />
+      <div class="hero-core">
+        <div class="hero-brand"><h1>{{ site.settings?.siteName || 'Intellisearch' }}</h1></div>
+        <AskBox ref="askBox" :show-prompt="false" mode-toggle :mode="mode" :helper-text="locating ? 'Getting your location for nearby results…' : ''" @update:mode="mode = $event" @submit="onAsk" />
+      </div>
       <section v-if="signedIn && (historyLoading || recent.length || suggestions.length || suggestionsLoading)" class="history-panel" aria-label="Search history and suggestions">
         <div v-if="recent.length" class="history-group">
           <span class="history-label">Recent searches</span>
@@ -118,10 +120,12 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* Anchored to the hero's bottom edge instead of participating in the flex
-   centering, so loading "Suggested for you" never pushes the title/ask box
-   off-center. max-height + scroll keeps it clear of the centered box on
-   short screens. */
+/* On tall screens the panel is anchored to the hero's bottom edge instead of
+   participating in the flex centering, so loading "Suggested for you" never
+   pushes the title/ask box off-center (max-height + scroll keeps it clear of
+   the centered box). On short screens that anchoring would overlap the ask
+   box, so the panel flows in the document below it instead and the page
+   scrolls naturally. */
 .history-panel {
   position: absolute;
   inset-inline: 0;
@@ -140,5 +144,13 @@ onMounted(() => {
 .history-refresh { margin-left: 6px; padding: 0 4px; border: 0; background: transparent; color: var(--color-muted); cursor: pointer; font-size: .85rem; }
 .history-refresh:hover { color: var(--color-primary); }
 .history-note { margin: 0; color: var(--color-muted); font-size: .78rem; }
-@media (max-width: 520px) { .history-panel { bottom: 12px; } }
+@media (max-width: 520px), (max-height: 560px) {
+  .history-panel {
+    position: static;
+    width: 100%;
+    max-height: none;
+    margin: 26px 0 0;
+    overflow: visible;
+  }
+}
 </style>
