@@ -202,3 +202,46 @@ func TestTrendingWordsWeeklyWindow(t *testing.T) {
 		t.Fatalf("expected tokyo (2) in current week, got %+v", result.Buckets[7].Top)
 	}
 }
+
+func TestAIStatsTokenUsage(t *testing.T) {
+	db := newTestDB(t)
+	usage := repositories.NewUsageLogRepository(db)
+	providers := repositories.NewProviderRepository(db)
+
+	provider := entities.AIProvider{ID: uuid.New(), Name: "polli", ProviderType: "pollinations", BaseURL: "https://gen.pollinations.ai", Model: "openai", IsActive: true, CreatedAt: time.Now().UTC()}
+	if err := providers.Create(&provider); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	rows := []entities.UsageLog{
+		{ID: 1, Query: "q1", Status: "completed", ProviderID: &provider.ID, InputTokens: 1000, OutputTokens: 200, GenerateMS: 2000, CreatedAt: now},
+		{ID: 2, Query: "q2", Status: "completed", ProviderID: &provider.ID, InputTokens: 500, OutputTokens: 100, GenerateMS: 1000, CreatedAt: now.Add(-time.Hour)},
+		// Old completed row outside the 7-day window must be excluded.
+		{ID: 3, Query: "q3", Status: "completed", ProviderID: &provider.ID, InputTokens: 9999, OutputTokens: 999, GenerateMS: 1000, CreatedAt: now.AddDate(0, 0, -8)},
+		// Failed asks don't count toward token totals.
+		{ID: 4, Query: "q4", Status: "failed", ProviderID: &provider.ID, InputTokens: 400, OutputTokens: 0, GenerateMS: 500, CreatedAt: now},
+	}
+	for _, row := range rows {
+		if err := usage.Create(&row); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	stats, err := NewStatsService(usage, nil, providers, nil, nil, nil).AIStats("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.TotalInputTokens != 1500 {
+		t.Fatalf("expected 1500 input tokens, got %d", stats.TotalInputTokens)
+	}
+	if stats.TotalOutputTokens != 300 {
+		t.Fatalf("expected 300 output tokens, got %d", stats.TotalOutputTokens)
+	}
+	// 300 output tokens over 3000ms of generation = 100 tok/s.
+	if stats.TokensPerSec != 100 {
+		t.Fatalf("expected 100 tokens/s, got %v", stats.TokensPerSec)
+	}
+	if stats.TotalCompleted != 3 {
+		t.Fatalf("expected 3 completed asks, got %d", stats.TotalCompleted)
+	}
+}

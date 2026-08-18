@@ -122,6 +122,17 @@ func (r *UsageLogRepository) ProviderPerformance() ([]ProviderStats, error) {
 	return rows, err
 }
 
+// TokenUsage sums the provider-reported input/output tokens and the LLM
+// generation time for completed asks since start. Used by the AI-stats panel
+// to show token usage and the tokens-per-second inference speed.
+func (r *UsageLogRepository) TokenUsage(start time.Time) (TokenUsage, error) {
+	var row TokenUsage
+	err := r.db.Model(&entities.UsageLog{}).Select(
+		"COALESCE(SUM(input_tokens), 0) AS input_tokens, COALESCE(SUM(output_tokens), 0) AS output_tokens, COALESCE(SUM(generate_ms), 0) AS generate_ms",
+	).Where("status = ? AND created_at >= ?", "completed", start).Scan(&row).Error
+	return row, err
+}
+
 type TopQuery struct {
 	Query string `json:"query"`
 	Count int64  `json:"count"`
@@ -143,4 +154,11 @@ type ProviderStats struct {
 	ProviderID uuid.UUID `json:"providerId"`
 	Successes  int64     `json:"successes"`
 	Total      int64     `json:"total"`
+}
+
+// TokenUsage is the summed token usage and generation time for a window.
+type TokenUsage struct {
+	InputTokens  int64 `json:"inputTokens"`
+	OutputTokens int64 `json:"outputTokens"`
+	GenerateMS   int64 `json:"generateMs"`
 }

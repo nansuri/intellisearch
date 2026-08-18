@@ -20,18 +20,24 @@ func TestGenerateWithOllama(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
 			t.Fatal(err)
 		}
-		_, _ = w.Write([]byte(`{"message":{"content":"  cited answer [1]  "}}`))
+		_, _ = w.Write([]byte(`{"message":{"content":"  cited answer [1]  "},"prompt_eval_count":120,"eval_count":45}`))
 	}))
 	defer server.Close()
 
 	service := NewLLMService(nil, "key")
 	provider := entities.AIProvider{ProviderType: "ollama", BaseURL: server.URL, Model: "llama3.2"}
-	answer, err := service.GenerateWith(context.Background(), provider, "system prompt", []ChatMessage{{Role: "user", Content: "hello"}}, GenerateOptions{})
+	result, err := service.GenerateWith(context.Background(), provider, "system prompt", []ChatMessage{{Role: "user", Content: "hello"}}, GenerateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if answer != "cited answer [1]" {
-		t.Fatalf("unexpected answer %q", answer)
+	if result.Content != "cited answer [1]" {
+		t.Fatalf("unexpected answer %q", result.Content)
+	}
+	if result.InputTokens != 120 || result.OutputTokens != 45 {
+		t.Fatalf("unexpected token usage: in=%d out=%d", result.InputTokens, result.OutputTokens)
+	}
+	if result.Duration <= 0 {
+		t.Fatal("expected a positive generation duration")
 	}
 	if received["model"] != "llama3.2" {
 		t.Fatalf("unexpected model %#v", received["model"])
@@ -53,7 +59,7 @@ func TestGenerateWithOpenAICompatible(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
 			t.Fatal(err)
 		}
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"openai answer"}}]}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"openai answer"}}],"usage":{"prompt_tokens":200,"completion_tokens":80}}`))
 	}))
 	defer server.Close()
 
@@ -63,12 +69,15 @@ func TestGenerateWithOpenAICompatible(t *testing.T) {
 	}
 	service := NewLLMService(nil, "key")
 	provider := entities.AIProvider{ProviderType: "openai_compatible", BaseURL: server.URL, Model: "gpt-4o-mini", APIKeyEncrypted: &sealed}
-	answer, err := service.GenerateWith(context.Background(), provider, "system", []ChatMessage{{Role: "user", Content: "hi"}}, GenerateOptions{})
+	result, err := service.GenerateWith(context.Background(), provider, "system", []ChatMessage{{Role: "user", Content: "hi"}}, GenerateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if answer != "openai answer" {
-		t.Fatalf("unexpected answer %q", answer)
+	if result.Content != "openai answer" {
+		t.Fatalf("unexpected answer %q", result.Content)
+	}
+	if result.InputTokens != 200 || result.OutputTokens != 80 {
+		t.Fatalf("unexpected token usage: in=%d out=%d", result.InputTokens, result.OutputTokens)
 	}
 	if authHeader != "Bearer sk-test-key" {
 		t.Fatalf("unexpected auth header %q", authHeader)
@@ -89,7 +98,7 @@ func TestGenerateWithPollinations(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
 			t.Fatal(err)
 		}
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"pollinations answer"}}]}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"pollinations answer"}}],"usage":{"prompt_tokens":10,"completion_tokens":5}}`))
 	}))
 	defer server.Close()
 
@@ -100,12 +109,12 @@ func TestGenerateWithPollinations(t *testing.T) {
 	service := NewLLMService(nil, "key")
 	// gen.pollinations.ai speaks the OpenAI wire format and requires a Bearer key.
 	provider := entities.AIProvider{ProviderType: "pollinations", BaseURL: server.URL, Model: "openai", APIKeyEncrypted: &sealed}
-	answer, err := service.GenerateWith(context.Background(), provider, "system", []ChatMessage{{Role: "user", Content: "hi"}}, GenerateOptions{})
+	result, err := service.GenerateWith(context.Background(), provider, "system", []ChatMessage{{Role: "user", Content: "hi"}}, GenerateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if answer != "pollinations answer" {
-		t.Fatalf("unexpected answer %q", answer)
+	if result.Content != "pollinations answer" {
+		t.Fatalf("unexpected answer %q", result.Content)
 	}
 	if authHeader != "Bearer pk_test_pollinations" {
 		t.Fatalf("unexpected auth header %q", authHeader)
@@ -156,12 +165,12 @@ func TestGenerateWithHuggingFace(t *testing.T) {
 	}
 	service := NewLLMService(nil, "key")
 	provider := entities.AIProvider{ProviderType: "huggingface", BaseURL: server.URL, Model: "Qwen/Qwen3-70B-Instruct", APIKeyEncrypted: &sealed}
-	answer, err := service.GenerateWith(context.Background(), provider, "system", []ChatMessage{{Role: "user", Content: "hi"}}, GenerateOptions{})
+	result, err := service.GenerateWith(context.Background(), provider, "system", []ChatMessage{{Role: "user", Content: "hi"}}, GenerateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if answer != "hf answer" {
-		t.Fatalf("unexpected answer %q", answer)
+	if result.Content != "hf answer" {
+		t.Fatalf("unexpected answer %q", result.Content)
 	}
 	if authHeader != "Bearer hf_test_token" {
 		t.Fatalf("unexpected auth header %q", authHeader)

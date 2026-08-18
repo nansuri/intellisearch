@@ -72,13 +72,16 @@ type LatencyStats struct {
 }
 
 type AIStats struct {
-	TotalCompleted int64                  `json:"totalCompleted"`
-	TotalFailed    int64                  `json:"totalFailed"`
-	SuccessRate    float64                `json:"successRate"`
-	Errors         []ErrorGroupView       `json:"errors"`
-	Latency        LatencyStats           `json:"latency"`
-	Providers      []ProviderPerformance  `json:"providers"`
-	Queue          QueueHealth            `json:"queue"`
+	TotalCompleted   int64                 `json:"totalCompleted"`
+	TotalFailed      int64                 `json:"totalFailed"`
+	SuccessRate      float64               `json:"successRate"`
+	TotalInputTokens int64                 `json:"totalInputTokens"`
+	TotalOutputTokens int64                `json:"totalOutputTokens"`
+	TokensPerSec     float64               `json:"tokensPerSec"`
+	Errors           []ErrorGroupView      `json:"errors"`
+	Latency          LatencyStats          `json:"latency"`
+	Providers        []ProviderPerformance `json:"providers"`
+	Queue            QueueHealth           `json:"queue"`
 }
 
 type TrendPoint struct {
@@ -320,7 +323,7 @@ func (s *StatsService) registerVisitTimes(start time.Time) ([]time.Time, error) 
 }
 
 // AIStats reports success/failure, error groups, latency percentiles, per-provider
-// performance, and live queue health.
+// performance, token usage (input/output) and generation speed, and live queue health.
 func (s *StatsService) AIStats(filterType string) (AIStats, error) {
 	now := time.Now().UTC()
 	weekAgo := now.AddDate(0, 0, -7)
@@ -331,6 +334,16 @@ func (s *StatsService) AIStats(filterType string) (AIStats, error) {
 		return stats, err
 	}
 	stats.Latency = latencyStats(latencies)
+
+	tokenUsage, err := s.usage.TokenUsage(weekAgo)
+	if err != nil {
+		return stats, err
+	}
+	stats.TotalInputTokens = tokenUsage.InputTokens
+	stats.TotalOutputTokens = tokenUsage.OutputTokens
+	if tokenUsage.GenerateMS > 0 {
+		stats.TokensPerSec = float64(tokenUsage.OutputTokens) * 1000 / float64(tokenUsage.GenerateMS)
+	}
 
 	errors, err := s.usage.ErrorGroups(filterType, 25)
 	if err != nil {

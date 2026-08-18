@@ -499,9 +499,13 @@ func TestAdminProviderQueueAndBrandingLive(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("user stats failed: %d", status)
 	}
-	status, _ = call(t, server, http.MethodGet, "/api/v1/admin/stats/ai", token, nil)
+	status, payload = call(t, server, http.MethodGet, "/api/v1/admin/stats/ai", token, nil)
 	if status != http.StatusOK {
 		t.Fatalf("ai stats failed: %d", status)
+	}
+	// Token usage cards are part of the AI-stats response.
+	if !bytes.Contains(payload, []byte(`"totalInputTokens"`)) || !bytes.Contains(payload, []byte(`"totalOutputTokens"`)) || !bytes.Contains(payload, []byte(`"tokensPerSec"`)) {
+		t.Fatalf("ai stats missing token fields: %s", payload)
 	}
 }
 

@@ -134,11 +134,11 @@ func (s *SearchHistoryService) Suggestions(ctx context.Context, userID uuid.UUID
 	}
 	system := `You are a research assistant. Suggest follow-up questions for a user based on their recent search history. Return ONLY a JSON array of strings with 3 specific, self-contained questions, for example ["question one", "question two", "question three"]. No markdown, no numbering, no commentary.`
 	userPrompt := "Recent searches: " + strings.Join(queries, " | ") + ". Suggest 3 related questions the user may want to explore next."
-	raw, err := s.llm.Generate(ctx, system, []ChatMessage{{Role: "user", Content: userPrompt}}, GenerateOptions{Temperature: 0.4, MaxTokens: 200})
+	generated, err := s.llm.Generate(ctx, system, []ChatMessage{{Role: "user", Content: userPrompt}}, GenerateOptions{Temperature: 0.4, MaxTokens: 200})
 	if err != nil {
 		return nil, err
 	}
-	items := parseSuggestions(raw)
+	items := parseSuggestions(generated.Content)
 	if ttl > 0 {
 		s.mu.Lock()
 		s.cache[userID] = cachedSuggestions{at: time.Now(), items: items}

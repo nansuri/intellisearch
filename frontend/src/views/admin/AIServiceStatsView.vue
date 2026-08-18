@@ -20,7 +20,7 @@ async function load() {
   } catch (e) { toast.error((e as Error).message) } finally { loading.value = false }
 }
 onMounted(load)
-import { formatMs, formatPercent } from '../../utils/format'
+import { formatMs, formatPercent, formatTokens, formatTokensPerSec } from '../../utils/format'
 const filterLabel = computed(() => errorCodes.value.find((code) => code === filter.value) || '')
 function changeFilter() { load() }
 </script>
@@ -34,6 +34,9 @@ function changeFilter() { load() }
         <StatCard label="Completed" :value="s.totalCompleted" />
         <StatCard label="Failed" :value="s.totalFailed" />
         <StatCard label="Avg latency" :value="formatMs(s.latency.averageMs)" hint="p50 / p95 / p99 below" />
+        <StatCard label="Input tokens" :value="formatTokens(s.totalInputTokens)" hint="last 7 days" />
+        <StatCard label="Output tokens" :value="formatTokens(s.totalOutputTokens)" hint="last 7 days" />
+        <StatCard label="Token speed" :value="formatTokensPerSec(s.tokensPerSec)" hint="output · last 7 days" />
       </section>
       <section class="admin-card">
         <div class="mini-head"><h2>Latency percentiles</h2></div>

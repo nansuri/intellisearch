@@ -152,7 +152,13 @@ type UsageLog struct {
 	ErrorCode    *string    `json:"errorCode,omitempty"`
 	ErrorMessage *string    `gorm:"type:text" json:"errorMessage,omitempty"`
 	ProviderID   *uuid.UUID `gorm:"type:uuid" json:"providerId,omitempty"`
-	CreatedAt    time.Time  `json:"createdAt"`
+	// InputTokens/OutputTokens record the provider-reported token usage for a
+	// completed ask (zero for non-AI search-mode asks); GenerateMS is the LLM
+	// call's own duration, used to derive the tokens-per-second speed.
+	InputTokens  int       `gorm:"default:0;index" json:"inputTokens"`
+	OutputTokens int       `gorm:"default:0;index" json:"outputTokens"`
+	GenerateMS   int       `gorm:"default:0" json:"generateMs"`
+	CreatedAt    time.Time `json:"createdAt"`
 }
 
 // SearchHistory is a per-user record of every search they run. It powers the

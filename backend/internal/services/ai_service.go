@@ -225,15 +225,18 @@ func (s *AIService) Answer(ctx context.Context, input AskInput) (AskResult, erro
 		userPrompt += "\n\nAvailable sources:\n" + strings.Join(promptSources, "\n\n")
 	}
 	chat := s.conversationContext(session, userMessage.ID)
-	answer, err := s.llm.GenerateWith(ctx, provider, system, append(chat, ChatMessage{Role: "user", Content: userPrompt}), GenerateOptions{})
+	generated, err := s.llm.GenerateWith(ctx, provider, system, append(chat, ChatMessage{Role: "user", Content: userPrompt}), GenerateOptions{})
 	if err != nil {
 		return fail(err)
 	}
 
-	assistantMessage.Content = answer
+	assistantMessage.Content = generated.Content
 	assistantMessage.Status = entities.MessageStatusCompleted
 	usageLog.LatencyMS = int(time.Since(started).Milliseconds())
 	usageLog.Status = entities.MessageStatusCompleted
+	usageLog.InputTokens = generated.InputTokens
+	usageLog.OutputTokens = generated.OutputTokens
+	usageLog.GenerateMS = int(generated.Duration.Milliseconds())
 	if providerErr == nil {
 		usageLog.ProviderID = &provider.ID
 	}
@@ -243,7 +246,7 @@ func (s *AIService) Answer(ctx context.Context, input AskInput) (AskResult, erro
 	if err := s.usageLogs.Update(&usageLog); err != nil {
 		return result, err
 	}
-	result.Answer = answer
+	result.Answer = generated.Content
 	result.Sources = sources
 	result.Images = images
 	return result, nil

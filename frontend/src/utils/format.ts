@@ -9,6 +9,18 @@ export function formatMs(value: number): string {
   return `${Math.round(value)} ms`
 }
 
+/** Thousands-separated token count, e.g. "1,234". */
+export function formatTokens(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '0'
+  return Math.round(value).toLocaleString()
+}
+
+/** Inference speed, e.g. "64.3 tok/s"; a dash when no generation time was recorded. */
+export function formatTokensPerSec(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '—'
+  return `${(Math.round(value * 10) / 10).toLocaleString()} tok/s`
+}
+
 /** Compact relative time, e.g. "2h ago", "3d ago", or a short date for older items. */
 export function relativeTime(iso: string | undefined | null): string {
   if (!iso) return ''

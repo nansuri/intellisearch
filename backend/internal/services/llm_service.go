@@ -31,6 +31,17 @@ type GenerateOptions struct {
 	MaxTokens   int
 }
 
+// GenerateResult is a completed provider call: the trimmed answer text plus the
+// provider-reported token usage and the call's own duration. Usage is zero when
+// the provider omits it; Duration measures only the LLM call, not the surrounding
+// search/crawl work, so tokens-per-second stays an inference-speed metric.
+type GenerateResult struct {
+	Content      string
+	InputTokens  int
+	OutputTokens int
+	Duration     time.Duration
+}
+
 // LLMService talks to the configured active AI provider (Ollama or an
 // OpenAI-compatible API). API keys are decrypted at call time and never logged.
 type LLMService struct {
@@ -44,10 +55,10 @@ func NewLLMService(providers *repositories.ProviderRepository, encryptionKey str
 }
 
 // Generate runs the chat against the currently active provider.
-func (s *LLMService) Generate(ctx context.Context, system string, messages []ChatMessage, opts GenerateOptions) (string, error) {
+func (s *LLMService) Generate(ctx context.Context, system string, messages []ChatMessage, opts GenerateOptions) (GenerateResult, error) {
 	provider, err := s.providers.Active()
 	if err != nil {
-		return "", ErrAIUnavailable
+		return GenerateResult{}, ErrAIUnavailable
 	}
 	return s.GenerateWith(ctx, provider, system, messages, opts)
 }
@@ -59,7 +70,7 @@ func (s *LLMService) Generate(ctx context.Context, system string, messages []Cha
 //   - openai_compatible POST {base}/v1/chat/completions
 //   - pollinations      POST {base}/v1/chat/completions  (OpenAI-compatible, Bearer key)
 //   - huggingface       POST {base}/chat/completions    (OpenAI-compatible, Bearer key)
-func (s *LLMService) GenerateWith(ctx context.Context, provider entities.AIProvider, system string, messages []ChatMessage, opts GenerateOptions) (string, error) {
+func (s *LLMService) GenerateWith(ctx context.Context, provider entities.AIProvider, system string, messages []ChatMessage, opts GenerateOptions) (GenerateResult, error) {
 	chat := []ChatMessage{{Role: "system", Content: system}}
 	chat = append(chat, messages...)
 	var body []byte
@@ -75,7 +86,7 @@ func (s *LLMService) GenerateWith(ctx context.Context, provider entities.AIProvi
 	} else {
 		suffix, ok := openAIEndpoint(provider.ProviderType)
 		if !ok {
-			return "", ErrAIProviderError
+			return GenerateResult{}, ErrAIProviderError
 		}
 		requestURL = strings.TrimRight(provider.BaseURL, "/") + suffix
 		payload := map[string]any{"model": provider.Model, "messages": chat}
@@ -88,43 +99,50 @@ func (s *LLMService) GenerateWith(ctx context.Context, provider entities.AIProvi
 		body, err = json.Marshal(payload)
 	}
 	if err != nil {
-		return "", ErrAIProviderError
+		return GenerateResult{}, ErrAIProviderError
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, requestURL, bytes.NewReader(body))
 	if err != nil {
-		return "", ErrAIUnavailable
+		return GenerateResult{}, ErrAIUnavailable
 	}
 	request.Header.Set("Content-Type", "application/json")
 	if provider.APIKeyEncrypted != nil && *provider.APIKeyEncrypted != "" {
 		key, err := DecryptSecret(*provider.APIKeyEncrypted, s.key)
 		if err != nil {
-			return "", ErrAIUnavailable
+			return GenerateResult{}, ErrAIUnavailable
 		}
 		request.Header.Set("Authorization", "Bearer "+key)
 	}
+	started := time.Now()
 	response, err := s.client.Do(request)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return "", ErrAITimeout
+			return GenerateResult{}, ErrAITimeout
 		}
-		return "", ErrAIUnavailable
+		return GenerateResult{}, ErrAIUnavailable
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		io.Copy(io.Discard, response.Body)
-		return "", fmt.Errorf("%w: status %d", ErrAIProviderError, response.StatusCode)
+		return GenerateResult{}, fmt.Errorf("%w: status %d", ErrAIProviderError, response.StatusCode)
 	}
+	duration := time.Since(started)
 	var content string
+	var inputTokens, outputTokens int
 	if provider.ProviderType == "ollama" {
 		var payload struct {
 			Message struct {
 				Content string `json:"content"`
 			} `json:"message"`
+			PromptEvalCount int `json:"prompt_eval_count"`
+			EvalCount       int `json:"eval_count"`
 		}
 		if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
-			return "", ErrAIProviderError
+			return GenerateResult{}, ErrAIProviderError
 		}
 		content = payload.Message.Content
+		inputTokens = payload.PromptEvalCount
+		outputTokens = payload.EvalCount
 	} else {
 		var payload struct {
 			Choices []struct {
@@ -132,16 +150,22 @@ func (s *LLMService) GenerateWith(ctx context.Context, provider entities.AIProvi
 					Content string `json:"content"`
 				} `json:"message"`
 			} `json:"choices"`
+			Usage struct {
+				PromptTokens     int `json:"prompt_tokens"`
+				CompletionTokens int `json:"completion_tokens"`
+			} `json:"usage"`
 		}
 		if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
-			return "", ErrAIProviderError
+			return GenerateResult{}, ErrAIProviderError
 		}
 		if len(payload.Choices) == 0 {
-			return "", ErrAIProviderError
+			return GenerateResult{}, ErrAIProviderError
 		}
 		content = payload.Choices[0].Message.Content
+		inputTokens = payload.Usage.PromptTokens
+		outputTokens = payload.Usage.CompletionTokens
 	}
-	return strings.TrimSpace(content), nil
+	return GenerateResult{Content: strings.TrimSpace(content), InputTokens: inputTokens, OutputTokens: outputTokens, Duration: duration}, nil
 }
 
 // openAIEndpoint returns the chat-completions path for every provider type
