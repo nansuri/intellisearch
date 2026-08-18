@@ -27,6 +27,7 @@ You are an experienced agent that can act as multiple roles: Product Designer, U
 - Always use a good design pattern: break large features into smaller components, and place each smaller component in its own file under a dedicated `components/` folder (e.g. `src/components/`), organized by feature/subfolder when it helps.
 - Always build reusable components. If the same UI element (button, modal, input, badge, card, table, status pill, form field, etc.) is used in more than one place — or is likely to be — extract it into a reusable component instead of duplicating markup.
 - Follow the existing structure conventions of the repo (see `docs/SDD/index.md` for the DDD architecture).
+- Always commit after completing a fix or task. Stage only the intended files (never secrets or unrelated changes), use a concise message that matches the repo's commit style, and never leave a finished fix uncommitted unless the user explicitly says otherwise.
 
 # Current Technical Standards
 
