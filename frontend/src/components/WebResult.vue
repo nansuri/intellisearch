@@ -85,6 +85,7 @@ const iconLetter = computed(() => (props.source.domain || 'w').trim().charAt(0).
 [data-theme="dark"] .web-result-url { color: #7ee08b; }
 .web-result-snippet {
   margin: 4px 0 0;
+  overflow-wrap: anywhere;
   color: var(--color-muted);
   font-size: .86rem;
   line-height: 1.55;

@@ -1,6 +1,9 @@
 /* The app frame pins the site footer to the bottom of short pages: the page
    shell fills the remaining viewport height and the footer flows after it. */
-.app-frame { display: flex; flex-direction: column; min-height: 100dvh; }
+/* clip (not hidden) stops any stray wide content (tables, mermaid svg, code)
+   from creating a horizontal scrollbar without turning the frame into a
+   scroll container — so the sticky header keeps sticking. */
+.app-frame { display: flex; flex-direction: column; min-height: 100dvh; overflow-x: clip; }
 .app-main { display: flex; flex-direction: column; flex: 1 0 auto; }
 .page-shell { flex: 1 0 auto; min-height: 0; padding: 0 clamp(20px, 4vw, 64px); }
 /* Full-bleed sticky bar: the negative side margins (equal to the page shell's
@@ -18,7 +21,7 @@
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
 }
-.app-header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 24px; width: min(1280px, 100%); min-height: 82px; margin: auto; }
+.app-header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 24px; width: min(1280px, 100%); min-height: 82px; margin: auto; padding-top: env(safe-area-inset-top); }
 .app-header--compact { grid-template-columns: auto minmax(0, 1fr) auto; gap: 18px; min-height: 68px; }
 .app-header--compact .header-center { width: 100%; justify-self: start; }
 .app-header--compact .ask-box { width: min(760px, 100%); }
@@ -40,7 +43,9 @@
 }
 @media (max-width: 520px) {
   .page-shell { padding-inline: 20px; }
-  .app-header { min-height: 72px; gap: 14px; }
+  /* Small top gap so the sticky bar isn't flush against the browser edge
+     (also clears notched/notch-safe areas on phones in landscape). */
+  .app-header { min-height: 72px; gap: 14px; padding-top: max(env(safe-area-inset-top), 6px); }
   .header-actions { gap: 8px; }
   .admin-entry { min-height: 34px; padding: 0 10px; font-size: .7rem; }
   .account-content { margin-top: 42px; }

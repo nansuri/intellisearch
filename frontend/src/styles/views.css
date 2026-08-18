@@ -1,4 +1,20 @@
-.hero { display: grid; justify-items: center; align-content: center; width: min(660px, 100%); min-height: calc(100dvh - 160px); margin: auto; padding: 0 0 82px; text-align: center; }
+/* The main page is a flex column whose hero fills the space between the sticky
+   header and the footer, so the ask box + title are truly centered vertically
+   (the old min-height + bottom-padding arithmetic left the title sitting
+   noticeably above the middle). The hero grows with its content, so a tall
+   history/suggestions panel never clips. */
+.main-page { display: flex; flex-direction: column; }
+.hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: min(660px, 100%);
+  margin: 0 auto;
+  padding: 0;
+  text-align: center;
+}
 .eyebrow, .section-label { color: var(--color-primary); font-size: .68rem; font-weight: 760; letter-spacing: .11em; text-transform: uppercase; }
 .eyebrow { display: flex; align-items: center; gap: 8px; margin-bottom: 22px; }
 .eyebrow span { width: 6px; height: 6px; border-radius: 50%; background: var(--color-primary); }
@@ -11,7 +27,10 @@
 .live-dot { width: 6px; height: 6px; border-radius: 50%; background: #37a169; box-shadow: 0 0 0 3px color-mix(in srgb, #37a169 16%, transparent); }
 .result-kicker { display: flex; flex-wrap: wrap; gap: 8px; color: var(--color-muted); font-size: .76rem; }
 .result-kicker span:first-child { color: var(--color-primary); font-weight: 720; }
-.result-query { max-width: 720px; margin-top: 14px; font-size: clamp(2rem, 4.2vw, 3.5rem); line-height: 1.08; }
+.result-query { max-width: 720px; margin-top: 14px; font-size: clamp(2rem, 4.2vw, 3.5rem); line-height: 1.08; overflow-wrap: anywhere; }
+/* Long unbroken tokens (URLs, code strings) in an answer or follow-up must wrap
+   inside the device width instead of blowing out the page horizontally. */
+.summary-card > p, .follow-up-question, .collapsed-chip-preview, .search-only-note, .empty-sources p, .map-card-center { overflow-wrap: anywhere; }
 .summary-card { display: grid; gap: 16px; margin-top: 38px; padding: 0 0 28px; border-bottom: 1px solid var(--color-border); }
 .summary-card > p { margin: 0; color: var(--color-text); font-size: 1.04rem; line-height: 1.75; }
 .summary-note { color: var(--color-muted); }
@@ -47,7 +66,6 @@
 .empty-note { margin: 0; color: var(--color-muted); font-size: .8rem; }
 .empty-note--error { color: var(--color-danger); }
 @media (max-width: 520px) {
-  .hero { min-height: calc(100dvh - 150px); padding-bottom: 56px; text-align: center; }
   .result-query { font-size: 2.45rem; }
   .summary-card, .settings-card { padding: 22px; }
   .account-heading { align-items: start; }

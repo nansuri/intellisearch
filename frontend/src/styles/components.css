@@ -53,7 +53,10 @@ select:hover { background: var(--color-surface-subtle); color: var(--color-text)
 .url-ask-form .base-button { min-height: 36px; padding-inline: 13px; border-radius: 8px; font-size: .76rem; }
 .skeleton-line { height: 14px; border-radius: 6px; background: linear-gradient(90deg, var(--color-surface-subtle) 25%, var(--color-border) 50%, var(--color-surface-subtle) 75%); background-size: 200% 100%; animation: skeleton-pulse 1.4s ease-in-out infinite; }
 .skeleton-line--short { width: 62%; }
-.markdown { min-width: 0; color: var(--color-text); font-size: 1.04rem; line-height: 1.75; }
+/* overflow-wrap: anywhere (inherited) keeps long URLs / code strings inside the
+   answer wrapping within the device width instead of blowing out the result
+   container; pre blocks opt out so code keeps its own horizontal scroll. */
+.markdown { min-width: 0; overflow-wrap: anywhere; color: var(--color-text); font-size: 1.04rem; line-height: 1.75; }
 .markdown > :first-child { margin-top: 0; }
 .markdown > :last-child { margin-bottom: 0; }
 .markdown p { margin: 14px 0; }
@@ -68,7 +71,7 @@ select:hover { background: var(--color-surface-subtle); color: var(--color-text)
 .markdown em { color: inherit; }
 .markdown blockquote { margin: 16px 0; padding: 4px 16px; border-left: 3px solid var(--color-primary); background: var(--color-surface-subtle); border-radius: 0 10px 10px 0; color: var(--color-muted); }
 .markdown code { padding: 2px 6px; border-radius: 6px; background: var(--color-surface-subtle); color: var(--color-text); font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: .86em; }
-.markdown pre { margin: 16px 0; padding: 16px; overflow-x: auto; border-radius: 12px; background: var(--color-surface-subtle); border: 1px solid var(--color-border); }
+.markdown pre { margin: 16px 0; padding: 16px; overflow-x: auto; overflow-wrap: normal; border-radius: 12px; background: var(--color-surface-subtle); border: 1px solid var(--color-border); }
 .markdown pre code { padding: 0; background: transparent; font-size: .86rem; }
 .markdown img { max-width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--color-border); }
 .markdown hr { margin: 26px 0; border: 0; border-top: 1px solid var(--color-border); }

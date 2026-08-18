@@ -309,9 +309,18 @@
 }
 @media (max-width: 520px) {
   .admin-content, .admin-header { padding-left: 20px; padding-right: 20px; }
-  .admin-header { align-items: flex-start; flex-direction: column; }
+  /* Keep the top bar on ONE row on phones: hamburger + page title on the left
+     (title ellipsizes), theme switch / avatar / sign out on the right. The
+     redundant site-name line and status pill are hidden to make room, and the
+     controls are compacted instead of wrapping to a second row. */
+  .admin-header { align-items: center; flex-direction: row; gap: 10px; }
+  .admin-header-title { min-width: 0; flex: 1 1 auto; }
   .admin-header-copy strong { font-size: .9rem; }
-  .admin-header-mobile-label { display: none; }
+  .admin-header-copy span { display: none; }
+  .admin-header-actions { gap: 8px; }
+  .admin-header-actions select { min-height: 34px; }
+  .admin-header-actions .status-pill { display: none; }
+  .admin-header-actions .base-button { min-height: 34px; padding: 0 12px; font-size: .76rem; }
   .admin-page-head { align-items: flex-start; flex-direction: column; }
   .form-grid-2 { grid-template-columns: 1fr; }
   .user-toolbar { align-items: stretch; flex-direction: column; }
