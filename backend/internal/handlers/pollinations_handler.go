@@ -6,7 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 
 	"intellisearch/internal/contracts"
 	"intellisearch/internal/middleware"
@@ -43,13 +42,13 @@ func (h *PollinationsHandler) resolveCredentials(c *gin.Context) (baseURL, apiKe
 	if request.ProviderID != nil {
 		baseURL, apiKey, err := h.admin.PollinationsCredentials(*request.ProviderID)
 		if err != nil {
-			middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN03001, "That Pollinations provider could not be found."))
+			middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN03001, "That Pollinations provider could not be found.", "resolve pollinations provider", err)
 			return "", "", false
 		}
 		return baseURL, apiKey, true
 	}
 	if request.APIKey == "" {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN07002, "Enter the Pollinations API key, or pick a saved Pollinations provider."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN07002, "Enter the Pollinations API key, or pick a saved Pollinations provider.", "missing pollinations key", nil)
 		return "", "", false
 	}
 	baseURL = request.BaseURL
@@ -63,14 +62,13 @@ func (h *PollinationsHandler) resolveCredentials(c *gin.Context) (baseURL, apiKe
 func (h *PollinationsHandler) respond(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, services.ErrPollinationsUnauthorized):
-		middleware.JSON(c, http.StatusBadGateway, contracts.Fail(contracts.ADMN07002, "That Pollinations API key was rejected — check it's valid and has account access."))
+		middleware.RespondError(c, http.StatusBadGateway, contracts.ADMN07002, "That Pollinations API key was rejected — check it's valid and has account access.", "pollinations key rejected", err)
 	case errors.Is(err, services.ErrPollinationsForbidden):
-		middleware.JSON(c, http.StatusBadGateway, contracts.Fail(contracts.ADMN07004, "That Pollinations API key is valid but lacks account access — create one with the account:usage / account:balance scopes on enter.pollinations.ai."))
+		middleware.RespondError(c, http.StatusBadGateway, contracts.ADMN07004, "That Pollinations API key is valid but lacks account access — create one with the account:usage / account:balance scopes on enter.pollinations.ai.", "pollinations key missing account scope", err)
 	case errors.Is(err, services.ErrPollinationsUploadFailed):
-		middleware.JSON(c, http.StatusBadGateway, contracts.Fail(contracts.ADMN07003, "The image could not be uploaded to Pollinations."))
+		middleware.RespondError(c, http.StatusBadGateway, contracts.ADMN07003, "The image could not be uploaded to Pollinations.", "pollinations upload failed", err)
 	default:
-		logrus.WithError(err).Error("pollinations account request failed")
-		middleware.JSON(c, http.StatusBadGateway, contracts.Fail(contracts.ADMN07001, "Couldn't reach the Pollinations account API — try again in a moment."))
+		middleware.RespondError(c, http.StatusBadGateway, contracts.ADMN07001, "Couldn't reach the Pollinations account API — try again in a moment.", "pollinations account request failed", err)
 	}
 }
 
@@ -141,14 +139,14 @@ func (h *PollinationsHandler) Upload(c *gin.Context) {
 	apiKey := c.PostForm("apiKey")
 	baseURL := c.PostForm("baseUrl")
 	if providerID == uuid.Nil && apiKey == "" {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN07002, "Enter the Pollinations API key, or pick a saved Pollinations provider."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN07002, "Enter the Pollinations API key, or pick a saved Pollinations provider.", "missing pollinations key", nil)
 		return
 	}
 	if providerID != uuid.Nil {
 		var err error
 		baseURL, apiKey, err = h.admin.PollinationsCredentials(providerID)
 		if err != nil {
-			middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN03001, "That Pollinations provider could not be found."))
+			middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN03001, "That Pollinations provider could not be found.", "resolve pollinations provider", err)
 			return
 		}
 	}
@@ -157,13 +155,13 @@ func (h *PollinationsHandler) Upload(c *gin.Context) {
 	}
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN07003, "Attach an image file to upload."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN07003, "Attach an image file to upload.", "missing upload file", err)
 		return
 	}
 	defer file.Close()
 	data := make([]byte, header.Size)
 	if _, err := file.Read(data); err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN07003, "That image could not be read."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN07003, "That image could not be read.", "unreadable upload file", err)
 		return
 	}
 	result, err := h.pollinations.Upload(c.Request.Context(), apiKey, header.Filename, header.Header.Get("Content-Type"), data)

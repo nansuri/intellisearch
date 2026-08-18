@@ -27,12 +27,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		Password string `json:"password"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.AUTH01001, "Enter your email and password."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.AUTH01001, "Enter your email and password.", "parse login request", err)
 		return
 	}
 	token, user, err := h.service.Login(request.Email, request.Password)
 	if err != nil {
-		middleware.JSON(c, http.StatusUnauthorized, contracts.Fail(contracts.AUTH01001, "Invalid email or password."))
+		middleware.RespondError(c, http.StatusUnauthorized, contracts.AUTH01001, "Invalid email or password.", "login rejected", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"token": token, "user": user}))
@@ -48,21 +48,20 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		Password string `json:"password"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.AUTH01004, "Enter your name, email, and a password of at least 8 characters."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.AUTH01004, "Enter your name, email, and a password of at least 8 characters.", "parse register request", err)
 		return
 	}
 	token, user, err := h.service.Register(request.Name, request.Email, request.Password)
 	if err != nil {
 		if errors.Is(err, services.ErrEmailTaken) {
-			middleware.JSON(c, http.StatusConflict, contracts.Fail(contracts.AUTH01005, "An account with that email already exists — try signing in."))
+			middleware.RespondError(c, http.StatusConflict, contracts.AUTH01005, "An account with that email already exists — try signing in.", "register email taken", err)
 			return
 		}
 		if errors.Is(err, services.ErrInvalidRegistration) {
-			middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.AUTH01004, "Enter your name, a valid email, and a password of at least 8 characters."))
+			middleware.RespondError(c, http.StatusBadRequest, contracts.AUTH01004, "Enter your name, a valid email, and a password of at least 8 characters.", "invalid registration", err)
 			return
 		}
-		logrus.WithError(err).Error("registration failed")
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.AUTH01004, "Your account could not be created. Please try again."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.AUTH01004, "Your account could not be created. Please try again.", "register failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"token": token, "user": user}))
@@ -72,7 +71,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 // CSRF state in an httpOnly cookie and redirects the browser to Google.
 func (h *AuthHandler) GoogleStart(c *gin.Context) {
 	if !h.service.GoogleConfigured() {
-		middleware.JSON(c, http.StatusServiceUnavailable, contracts.Fail(contracts.AUTH01003, "Google sign-in is not configured on this deployment."))
+		middleware.RespondError(c, http.StatusServiceUnavailable, contracts.AUTH01003, "Google sign-in is not configured on this deployment.", "google not configured", nil)
 		return
 	}
 	state := services.RandomToken(24)

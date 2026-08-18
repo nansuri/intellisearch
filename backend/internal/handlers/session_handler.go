@@ -29,24 +29,24 @@ func NewSessionHandler(sessions *repositories.SessionRepository, messages *repos
 func (h *SessionHandler) Get(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		middleware.JSON(c, http.StatusNotFound, contracts.Fail(contracts.SESS01001, "That conversation could not be found."))
+		middleware.RespondError(c, http.StatusNotFound, contracts.SESS01001, "That conversation could not be found.", "parse session id", err)
 		return
 	}
 	session, err := h.sessions.Get(id)
 	if err != nil {
-		middleware.JSON(c, http.StatusNotFound, contracts.Fail(contracts.SESS01001, "That conversation could not be found."))
+		middleware.RespondError(c, http.StatusNotFound, contracts.SESS01001, "That conversation could not be found.", "load session", err)
 		return
 	}
 	if session.UserID != nil {
 		callerID, authErr := h.optionalUserID(c)
 		if authErr != nil || callerID == nil || *callerID != *session.UserID {
-			middleware.JSON(c, http.StatusForbidden, contracts.Fail(contracts.SESS01002, "You don't have access to that conversation."))
+			middleware.RespondError(c, http.StatusForbidden, contracts.SESS01002, "You don't have access to that conversation.", "session access denied", authErr)
 			return
 		}
 	}
 	messages, err := h.sessions.Messages(id)
 	if err != nil {
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.SESS01001, "That conversation could not be loaded."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.SESS01001, "That conversation could not be loaded.", "load session messages", err)
 		return
 	}
 	views := make([]gin.H, 0, len(messages))

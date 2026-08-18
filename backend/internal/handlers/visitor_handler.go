@@ -5,7 +5,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 
 	"intellisearch/internal/contracts"
 	"intellisearch/internal/middleware"
@@ -47,8 +46,7 @@ func (h *VisitorHandler) TrackRegisterVisit(c *gin.Context) {
 	}
 	_, created, err := h.registerVisit.Claim(visitorID, repositories.HashIP(ip))
 	if err != nil {
-		logrus.WithError(err).Error("register-page visit claim failed")
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.STTS01002, "The visit could not be recorded."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.STTS01002, "The visit could not be recorded.", "register-page visit claim failed", err)
 		return
 	}
 	// Mirror the same identity cookie the AI handler issues so a visitor who

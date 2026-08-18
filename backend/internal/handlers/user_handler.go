@@ -28,7 +28,7 @@ func (h *UserHandler) Me(c *gin.Context) {
 	userID := c.MustGet(middleware.UserIDKey).(uuid.UUID)
 	user, err := h.service.Get(userID)
 	if err != nil {
-		middleware.JSON(c, http.StatusNotFound, contracts.Fail(contracts.USER01001, "Your account could not be found."))
+		middleware.RespondError(c, http.StatusNotFound, contracts.USER01001, "Your account could not be found.", "load profile", err)
 		return
 	}
 	used, quota, err := h.service.Usage(userID)
@@ -55,7 +55,7 @@ func (h *UserHandler) UpdateMe(c *gin.Context) {
 		Email string `json:"email"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.USER01002, "Enter a valid name and email address."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.USER01002, "Enter a valid name and email address.", "parse profile update", err)
 		return
 	}
 	user, err := h.service.UpdateProfile(c.MustGet(middleware.UserIDKey).(uuid.UUID), request.Name, request.Email)
@@ -66,7 +66,7 @@ func (h *UserHandler) UpdateMe(c *gin.Context) {
 			code = contracts.USER01002
 			message = "Enter a valid name and email address."
 		}
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(code, message))
+		middleware.RespondError(c, http.StatusBadRequest, code, message, "profile update failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(user))
@@ -86,8 +86,7 @@ func (h *UserHandler) History(c *gin.Context) {
 	}
 	entries, err := h.history.RecentDetailed(c.MustGet(middleware.UserIDKey).(uuid.UUID), limit)
 	if err != nil {
-		logrus.WithError(err).Error("search history load failed")
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.USER03001, "Your search history could not be loaded."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.USER03001, "Your search history could not be loaded.", "search history load failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"items": entries}))
@@ -113,8 +112,7 @@ func (h *UserHandler) Suggestions(c *gin.Context) {
 // ClearHistory deletes all of the signed-in user's search history.
 func (h *UserHandler) ClearHistory(c *gin.Context) {
 	if err := h.history.Clear(c.MustGet(middleware.UserIDKey).(uuid.UUID)); err != nil {
-		logrus.WithError(err).Error("search history clear failed")
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.USER03002, "Your search history could not be cleared."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.USER03002, "Your search history could not be cleared.", "search history clear failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"cleared": true}))
@@ -124,24 +122,23 @@ func (h *UserHandler) ClearHistory(c *gin.Context) {
 func (h *UserHandler) Avatar(c *gin.Context) {
 	header, err := c.FormFile("avatar")
 	if err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.USER02001, "Choose an image to upload for your avatar."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.USER02001, "Choose an image to upload for your avatar.", "missing avatar file", err)
 		return
 	}
 	data, err := readUpload(header)
 	if err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.USER02001, "That image could not be read."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.USER02001, "That image could not be read.", "unreadable avatar file", err)
 		return
 	}
 	url, err := h.service.Avatar(c.MustGet(middleware.UserIDKey).(uuid.UUID), header.Filename, data)
 	if err != nil {
 		if err == services.ErrUploadRejected {
-			middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.USER02002, "The avatar must be a JPG, PNG, GIF, or WebP under 2 MB."))
+			middleware.RespondError(c, http.StatusBadRequest, contracts.USER02002, "The avatar must be a JPG, PNG, GIF, or WebP under 2 MB.", "avatar upload rejected", err)
 			return
 		}
 		// Avatar saves share the logo problem: a missing/unwritable UPLOADS_DIR
 		// in the container surfaces here — log the cause for diagnosis.
-		logrus.WithError(err).Error("avatar upload failed")
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.USER02001, "Your avatar could not be saved."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.USER02001, "Your avatar could not be saved.", "avatar upload failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"avatarUrl": url}))

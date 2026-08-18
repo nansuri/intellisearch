@@ -23,7 +23,7 @@ func New(corsOrigins, uploadsDir string, siteService *services.SiteService, auth
 	v1.GET("/site", func(c *gin.Context) {
 		site, err := siteService.Public()
 		if err != nil {
-			middleware.JSON(c, http.StatusServiceUnavailable, contracts.Fail(contracts.SITE01001, "Site settings are temporarily unavailable."))
+			middleware.RespondError(c, http.StatusServiceUnavailable, contracts.SITE01001, "Site settings are temporarily unavailable.", "load public site settings", err)
 			return
 		}
 		middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{

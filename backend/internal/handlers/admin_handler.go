@@ -10,7 +10,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 
 	"intellisearch/internal/contracts"
 	"intellisearch/internal/middleware"
@@ -34,7 +33,7 @@ func NewAdminHandler(users *services.UserService, admin *services.AdminService, 
 func (h *AdminHandler) ListUsers(c *gin.Context) {
 	users, total, err := h.users.List(c.Query("q"), queryInt(c, "page", 1), queryInt(c, "page_size", 20))
 	if err != nil {
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.ADMN01001, "Users could not be loaded."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.ADMN01001, "Users could not be loaded.", "list users", err)
 		return
 	}
 	page := queryInt(c, "page", 1)
@@ -51,12 +50,12 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		AIDailyQuota int    `json:"aiDailyQuota"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN01001, "Enter valid user details."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN01001, "Enter valid user details.", "parse create user", err)
 		return
 	}
 	user, err := h.users.Create(request.Name, request.Email, request.Password, request.Role, request.AIDailyQuota)
 	if err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN01001, "That user could not be created — check the details and try again."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN01001, "That user could not be created — check the details and try again.", "create user failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(user))
@@ -73,7 +72,7 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		AIDailyQuota *int    `json:"aiDailyQuota"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN01001, "Enter valid user details."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN01001, "Enter valid user details.", "parse update user", err)
 		return
 	}
 	quota := -1
@@ -89,7 +88,7 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	}
 	user, err := h.users.Update(id, role, status, quota)
 	if err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN01001, "That user could not be updated."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN01001, "That user could not be updated.", "update user failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(user))
@@ -101,7 +100,7 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 		return
 	}
 	if err := h.users.Delete(id); err != nil {
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.ADMN01001, "That user could not be deleted."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.ADMN01001, "That user could not be deleted.", "delete user failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"deleted": true}))
@@ -110,7 +109,7 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 func (h *AdminHandler) Stats(c *gin.Context) {
 	stats, err := h.stats.UserStats()
 	if err != nil {
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.ADMN02001, "Statistics could not be computed."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.ADMN02001, "Statistics could not be computed.", "compute user stats", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(stats))
@@ -122,7 +121,7 @@ func (h *AdminHandler) Stats(c *gin.Context) {
 func (h *AdminHandler) Visitors(c *gin.Context) {
 	stats, err := h.stats.VisitorStats()
 	if err != nil {
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.STTS01001, "Visitor statistics could not be computed."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.STTS01001, "Visitor statistics could not be computed.", "compute visitor stats", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(stats))
@@ -131,7 +130,7 @@ func (h *AdminHandler) Visitors(c *gin.Context) {
 func (h *AdminHandler) AIStats(c *gin.Context) {
 	stats, err := h.stats.AIStats(c.Query("type"))
 	if err != nil {
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.ADMN02001, "AI statistics could not be computed."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.ADMN02001, "AI statistics could not be computed.", "compute ai stats", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(stats))
@@ -140,7 +139,7 @@ func (h *AdminHandler) AIStats(c *gin.Context) {
 func (h *AdminHandler) Trends(c *gin.Context) {
 	trends, err := h.stats.Trends()
 	if err != nil {
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.ADMN02001, "Trend statistics could not be computed."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.ADMN02001, "Trend statistics could not be computed.", "compute trends", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(trends))
@@ -151,7 +150,7 @@ func (h *AdminHandler) Trends(c *gin.Context) {
 func (h *AdminHandler) TrendingWords(c *gin.Context) {
 	trends, err := h.stats.TrendingWords(c.Query("window"))
 	if err != nil {
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.ADMN02001, "Trend statistics could not be computed."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.ADMN02001, "Trend statistics could not be computed.", "compute trending words", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(trends))
@@ -160,7 +159,7 @@ func (h *AdminHandler) TrendingWords(c *gin.Context) {
 func (h *AdminHandler) ListProviders(c *gin.Context) {
 	providers, err := h.admin.Providers()
 	if err != nil {
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.ADMN03001, "Providers could not be loaded."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.ADMN03001, "Providers could not be loaded.", "list providers", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"providers": providers}))
@@ -177,12 +176,12 @@ func (h *AdminHandler) CreateProvider(c *gin.Context) {
 		IsActive     bool            `json:"isActive"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN03002, "Enter a valid provider configuration."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN03002, "Enter a valid provider configuration.", "parse create provider", err)
 		return
 	}
 	provider, err := h.admin.CreateProvider(request.Name, request.ProviderType, request.BaseURL, request.Model, request.Parameters, request.APIKey, request.IsActive)
 	if err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN03002, "That provider could not be saved — check the configuration."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN03002, "That provider could not be saved — check the configuration.", "create provider failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(provider))
@@ -203,16 +202,16 @@ func (h *AdminHandler) UpdateProvider(c *gin.Context) {
 		IsActive     bool            `json:"isActive"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN03002, "Enter a valid provider configuration."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN03002, "Enter a valid provider configuration.", "parse update provider", err)
 		return
 	}
 	provider, err := h.admin.UpdateProvider(id, strPtr(request.Name), strPtr(request.ProviderType), strPtr(request.BaseURL), strPtr(request.Model), request.Parameters, request.APIKey, request.IsActive)
 	if err != nil {
 		if errors.Is(err, services.ErrProviderNotFound) {
-			middleware.JSON(c, http.StatusNotFound, contracts.Fail(contracts.ADMN03001, "That provider no longer exists."))
+			middleware.RespondError(c, http.StatusNotFound, contracts.ADMN03001, "That provider no longer exists.", "update provider not found", err)
 			return
 		}
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN03002, "That provider could not be saved — check the configuration."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN03002, "That provider could not be saved — check the configuration.", "update provider failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(provider))
@@ -224,7 +223,7 @@ func (h *AdminHandler) DeleteProvider(c *gin.Context) {
 		return
 	}
 	if err := h.admin.DeleteProvider(id); err != nil {
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.ADMN03001, "That provider could not be deleted."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.ADMN03001, "That provider could not be deleted.", "delete provider failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"deleted": true}))
@@ -254,17 +253,16 @@ func (h *AdminHandler) OllamaHealth(c *gin.Context) {
 
 func (h *AdminHandler) respondOllamaError(c *gin.Context, err error) {
 	if errors.Is(err, services.ErrInvalidOllamaURL) {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN06001, "Enter a valid Ollama base URL (http:// or https://)."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN06001, "Enter a valid Ollama base URL (http:// or https://).", "invalid ollama url", err)
 		return
 	}
-	logrus.WithError(err).Error("ollama server request failed")
-	middleware.JSON(c, http.StatusBadGateway, contracts.Fail(contracts.ADMN06001, "Couldn't reach the Ollama server — check the base URL and that it's running."))
+	middleware.RespondError(c, http.StatusBadGateway, contracts.ADMN06001, "Couldn't reach the Ollama server — check the base URL and that it's running.", "ollama request failed", err)
 }
 
 func (h *AdminHandler) QueueConfig(c *gin.Context) {
 	config, err := h.admin.QueueConfig()
 	if err != nil {
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.ADMN04001, "Queue configuration could not be loaded."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.ADMN04001, "Queue configuration could not be loaded.", "load queue config", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(config))
@@ -281,12 +279,12 @@ func (h *AdminHandler) UpdateQueueConfig(c *gin.Context) {
 		MaxImageResults      int `json:"maxImageResults"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN04001, "Enter valid queue settings."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN04001, "Enter valid queue settings.", "parse queue config", err)
 		return
 	}
 	config, err := h.admin.UpdateQueueConfig(request.MaxConcurrent, request.MaxQueueSize, request.RequestTimeoutMS, request.PerUserRateLimit, request.SuggestionCacheHours, request.DefaultDailyQuota, request.MaxImageResults)
 	if err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN04001, "That queue configuration is not valid."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN04001, "That queue configuration is not valid.", "queue config invalid", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(config))
@@ -295,7 +293,7 @@ func (h *AdminHandler) UpdateQueueConfig(c *gin.Context) {
 func (h *AdminHandler) SiteSettings(c *gin.Context) {
 	settings, err := h.admin.SiteSettings()
 	if err != nil {
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.ADMN05001, "Site settings could not be loaded."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.ADMN05001, "Site settings could not be loaded.", "load site settings", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(settings))
@@ -308,12 +306,12 @@ func (h *AdminHandler) UpdateSiteSettings(c *gin.Context) {
 		Copyright *string `json:"copyright"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN05001, "Enter a valid site name."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN05001, "Enter a valid site name.", "parse site settings", err)
 		return
 	}
 	settings, err := h.admin.UpdateSiteSettings(request.SiteName, request.Tagline, request.Copyright)
 	if err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN05001, "That site configuration is not valid."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN05001, "That site configuration is not valid.", "site settings invalid", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(settings))
@@ -322,24 +320,23 @@ func (h *AdminHandler) UpdateSiteSettings(c *gin.Context) {
 func (h *AdminHandler) UploadLogo(c *gin.Context) {
 	header, err := c.FormFile("logo")
 	if err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN05002, "Choose a logo image to upload."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN05002, "Choose a logo image to upload.", "missing logo file", err)
 		return
 	}
 	data, err := readUpload(header)
 	if err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN05002, "That logo could not be read."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN05002, "That logo could not be read.", "unreadable logo file", err)
 		return
 	}
 	url, err := h.admin.Logo(header.Filename, data)
 	if err != nil {
 		if errors.Is(err, services.ErrUploadRejected) {
-			middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN05002, "The logo must be a JPG, PNG, GIF, or WebP under 2 MB."))
+			middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN05002, "The logo must be a JPG, PNG, GIF, or WebP under 2 MB.", "logo upload rejected", err)
 			return
 		}
 		// ADMN05002 with the cause in the logs — upload failures are almost
 		// always a missing/unwritable UPLOADS_DIR in the container.
-		logrus.WithError(err).Error("site logo upload failed")
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.ADMN05002, "That logo could not be saved."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.ADMN05002, "That logo could not be saved.", "site logo upload failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"logoUrl": url}))
@@ -347,7 +344,7 @@ func (h *AdminHandler) UploadLogo(c *gin.Context) {
 
 func (h *AdminHandler) DeleteLogo(c *gin.Context) {
 	if err := h.admin.RemoveLogo(); err != nil {
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.ADMN05002, "The logo could not be removed."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.ADMN05002, "The logo could not be removed.", "remove logo failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"logoUrl": nil}))
@@ -356,22 +353,21 @@ func (h *AdminHandler) DeleteLogo(c *gin.Context) {
 func (h *AdminHandler) UploadFavicon(c *gin.Context) {
 	header, err := c.FormFile("favicon")
 	if err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN05003, "Choose a favicon image to upload."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN05003, "Choose a favicon image to upload.", "missing favicon file", err)
 		return
 	}
 	data, err := readUpload(header)
 	if err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN05003, "That favicon could not be read."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN05003, "That favicon could not be read.", "unreadable favicon file", err)
 		return
 	}
 	url, err := h.admin.Favicon(header.Filename, data)
 	if err != nil {
 		if errors.Is(err, services.ErrUploadRejected) {
-			middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.ADMN05003, "The favicon must be a JPG, PNG, GIF, or WebP under 2 MB."))
+			middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN05003, "The favicon must be a JPG, PNG, GIF, or WebP under 2 MB.", "favicon upload rejected", err)
 			return
 		}
-		logrus.WithError(err).Error("site favicon upload failed")
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.ADMN05003, "That favicon could not be saved."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.ADMN05003, "That favicon could not be saved.", "site favicon upload failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"faviconUrl": url}))
@@ -379,7 +375,7 @@ func (h *AdminHandler) UploadFavicon(c *gin.Context) {
 
 func (h *AdminHandler) DeleteFavicon(c *gin.Context) {
 	if err := h.admin.RemoveFavicon(); err != nil {
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.ADMN05003, "The favicon could not be removed."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.ADMN05003, "The favicon could not be removed.", "remove favicon failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"faviconUrl": nil}))
@@ -417,7 +413,7 @@ func queryInt(c *gin.Context, key string, fallback int) int {
 func userIDParam(c *gin.Context) (uuid.UUID, bool) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		middleware.JSON(c, http.StatusNotFound, contracts.Fail(contracts.USER01001, "That user could not be found."))
+		middleware.RespondError(c, http.StatusNotFound, contracts.USER01001, "That user could not be found.", "parse user id", err)
 		return uuid.Nil, false
 	}
 	return id, true
@@ -426,7 +422,7 @@ func userIDParam(c *gin.Context) (uuid.UUID, bool) {
 func providerIDParam(c *gin.Context) (uuid.UUID, bool) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		middleware.JSON(c, http.StatusNotFound, contracts.Fail(contracts.ADMN03001, "That provider could not be found."))
+		middleware.RespondError(c, http.StatusNotFound, contracts.ADMN03001, "That provider could not be found.", "parse provider id", err)
 		return uuid.Nil, false
 	}
 	return id, true

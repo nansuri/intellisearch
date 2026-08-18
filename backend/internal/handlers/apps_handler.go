@@ -36,8 +36,7 @@ func NewAppsHandler(notes *services.NoteService, translate *services.TranslateSe
 func (h *AppsHandler) ListNotes(c *gin.Context) {
 	notes, err := h.notes.List(c.MustGet(middleware.UserIDKey).(uuid.UUID))
 	if err != nil {
-		logrus.WithError(err).Error("notes list failed")
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.NOTE01001, "Your notes could not be loaded."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.NOTE01001, "Your notes could not be loaded.", "notes list failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"items": notes}))
@@ -51,17 +50,16 @@ func (h *AppsHandler) CreateNote(c *gin.Context) {
 		SessionID   *uuid.UUID `json:"sessionId"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.NOTE01002, "Enter a title and some content for your note."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.NOTE01002, "Enter a title and some content for your note.", "parse create note", err)
 		return
 	}
 	note, err := h.notes.Create(c.MustGet(middleware.UserIDKey).(uuid.UUID), request.Title, request.Content, request.SourceQuery, request.SessionID)
 	if err != nil {
 		if errors.Is(err, services.ErrNoteInvalid) {
-			middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.NOTE01002, "Enter a title and some content for your note."))
+			middleware.RespondError(c, http.StatusBadRequest, contracts.NOTE01002, "Enter a title and some content for your note.", "invalid note", err)
 			return
 		}
-		logrus.WithError(err).Error("note create failed")
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.NOTE01002, "That note could not be saved."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.NOTE01002, "That note could not be saved.", "note create failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(note))
@@ -77,19 +75,18 @@ func (h *AppsHandler) UpdateNote(c *gin.Context) {
 		Content string `json:"content"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.NOTE01002, "Enter a title and some content for your note."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.NOTE01002, "Enter a title and some content for your note.", "parse update note", err)
 		return
 	}
 	note, err := h.notes.Update(c.MustGet(middleware.UserIDKey).(uuid.UUID), id, request.Title, request.Content)
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrNoteNotFound):
-			middleware.JSON(c, http.StatusNotFound, contracts.Fail(contracts.NOTE01003, "That note no longer exists."))
+			middleware.RespondError(c, http.StatusNotFound, contracts.NOTE01003, "That note no longer exists.", "update note not found", err)
 		case errors.Is(err, services.ErrNoteInvalid):
-			middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.NOTE01002, "Enter a title and some content for your note."))
+			middleware.RespondError(c, http.StatusBadRequest, contracts.NOTE01002, "Enter a title and some content for your note.", "invalid note", err)
 		default:
-			logrus.WithError(err).Error("note update failed")
-			middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.NOTE01002, "That note could not be saved."))
+			middleware.RespondError(c, http.StatusInternalServerError, contracts.NOTE01002, "That note could not be saved.", "note update failed", err)
 		}
 		return
 	}
@@ -103,11 +100,10 @@ func (h *AppsHandler) DeleteNote(c *gin.Context) {
 	}
 	if err := h.notes.Delete(c.MustGet(middleware.UserIDKey).(uuid.UUID), id); err != nil {
 		if errors.Is(err, services.ErrNoteNotFound) {
-			middleware.JSON(c, http.StatusNotFound, contracts.Fail(contracts.NOTE01003, "That note no longer exists."))
+			middleware.RespondError(c, http.StatusNotFound, contracts.NOTE01003, "That note no longer exists.", "delete note not found", err)
 			return
 		}
-		logrus.WithError(err).Error("note delete failed")
-		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.NOTE01004, "That note could not be deleted."))
+		middleware.RespondError(c, http.StatusInternalServerError, contracts.NOTE01004, "That note could not be deleted.", "note delete failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"deleted": true}))
@@ -120,13 +116,12 @@ func (h *AppsHandler) DeleteNote(c *gin.Context) {
 // Languages proxies LibreTranslate's language list for the translator UI.
 func (h *AppsHandler) TranslateLanguages(c *gin.Context) {
 	if !h.translate.Available() {
-		middleware.JSON(c, http.StatusServiceUnavailable, contracts.Fail(contracts.TRAN01001, "The translator is not configured on this deployment."))
+		middleware.RespondError(c, http.StatusServiceUnavailable, contracts.TRAN01001, "The translator is not configured on this deployment.", "translator not configured", nil)
 		return
 	}
 	languages, err := h.translate.Languages(c.Request.Context())
 	if err != nil {
-		logrus.WithError(err).Error("translate languages failed")
-		middleware.JSON(c, http.StatusBadGateway, contracts.Fail(contracts.TRAN01001, "The translator is temporarily unavailable."))
+		middleware.RespondError(c, http.StatusBadGateway, contracts.TRAN01001, "The translator is temporarily unavailable.", "translate languages failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"languages": languages}))
@@ -136,7 +131,7 @@ func (h *AppsHandler) TranslateLanguages(c *gin.Context) {
 // LibreTranslate container cannot be spammed through the API.
 func (h *AppsHandler) Translate(c *gin.Context) {
 	if !h.translate.Available() {
-		middleware.JSON(c, http.StatusServiceUnavailable, contracts.Fail(contracts.TRAN01001, "The translator is not configured on this deployment."))
+		middleware.RespondError(c, http.StatusServiceUnavailable, contracts.TRAN01001, "The translator is not configured on this deployment.", "translator not configured", nil)
 		return
 	}
 	var request struct {
@@ -146,24 +141,23 @@ func (h *AppsHandler) Translate(c *gin.Context) {
 		Format string `json:"format"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.TRAN01002, "Enter text to translate and choose a target language."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.TRAN01002, "Enter text to translate and choose a target language.", "parse translate request", err)
 		return
 	}
 	allowed, err := h.limiter.Allow(c.Request.Context(), "translate", c.MustGet(middleware.UserIDKey).(uuid.UUID).String(), 30, time.Minute)
 	if err != nil {
 		logrus.WithError(err).WithField("scope", "translate").Error("rate limiter unavailable; allowing request")
 	} else if !allowed {
-		middleware.JSON(c, http.StatusTooManyRequests, contracts.Fail(contracts.TRAN01003, "You're translating too quickly — slow down and try again."))
+		middleware.RespondError(c, http.StatusTooManyRequests, contracts.TRAN01003, "You're translating too quickly — slow down and try again.", "translate rate limited", nil)
 		return
 	}
 	translated, err := h.translate.Translate(c.Request.Context(), request.Q, request.Source, request.Target, request.Format)
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrTranslateInvalid):
-			middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.TRAN01002, "Enter text to translate and choose a target language."))
+			middleware.RespondError(c, http.StatusBadRequest, contracts.TRAN01002, "Enter text to translate and choose a target language.", "invalid translate request", err)
 		default:
-			logrus.WithError(err).Error("translate failed")
-			middleware.JSON(c, http.StatusBadGateway, contracts.Fail(contracts.TRAN01001, "The translator is temporarily unavailable."))
+			middleware.RespondError(c, http.StatusBadGateway, contracts.TRAN01001, "The translator is temporarily unavailable.", "translate failed", err)
 		}
 		return
 	}
@@ -174,7 +168,7 @@ func (h *AppsHandler) Translate(c *gin.Context) {
 func noteIDParam(c *gin.Context) (uint64, bool) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.NOTE01003, "That note could not be found."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.NOTE01003, "That note could not be found.", "parse note id", err)
 		return 0, false
 	}
 	return id, true

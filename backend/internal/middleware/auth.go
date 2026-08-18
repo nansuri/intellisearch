@@ -16,14 +16,14 @@ func RequireAuth(auth *services.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		raw := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
 		if raw == c.GetHeader("Authorization") || raw == "" {
-			JSON(c, http.StatusUnauthorized, contracts.Fail(contracts.AUTH01002, "Your session is invalid or has expired."))
+			RespondError(c, http.StatusUnauthorized, contracts.AUTH01002, "Your session is invalid or has expired.", "missing bearer token", nil)
 			c.Abort()
 			return
 		}
 		claims, err := auth.Parse(raw)
 		id, parseErr := uuid.Parse(claims.UserID)
 		if err != nil || parseErr != nil {
-			JSON(c, http.StatusUnauthorized, contracts.Fail(contracts.AUTH01002, "Your session is invalid or has expired."))
+			RespondError(c, http.StatusUnauthorized, contracts.AUTH01002, "Your session is invalid or has expired.", "invalid bearer token", err)
 			c.Abort()
 			return
 		}
@@ -35,7 +35,7 @@ func RequireAuth(auth *services.AuthService) gin.HandlerFunc {
 func RequireSuperOwner() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.GetString(UserRoleKey) != "super_owner" {
-			JSON(c, http.StatusForbidden, contracts.Fail(contracts.AUTH02001, "Super Owner access is required."))
+			RespondError(c, http.StatusForbidden, contracts.AUTH02001, "Super Owner access is required.", "super owner only", nil)
 			c.Abort()
 			return
 		}

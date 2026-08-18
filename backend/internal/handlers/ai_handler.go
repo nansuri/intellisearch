@@ -166,12 +166,12 @@ func (h *AIHandler) Ask(c *gin.Context) {
 		Mode      string                `json:"mode"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.AISY01004, "Ask a question first."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.AISY01004, "Ask a question first.", "parse ask request", err)
 		return
 	}
 	userID, err := h.optionalUser(c)
 	if err != nil {
-		middleware.JSON(c, http.StatusUnauthorized, contracts.Fail(contracts.AUTH01002, "Your session is invalid or has expired."))
+		middleware.RespondError(c, http.StatusUnauthorized, contracts.AUTH01002, "Your session is invalid or has expired.", "unauthorized ask caller", err)
 		return
 	}
 	var location *services.GeoLocation
@@ -209,12 +209,12 @@ func (h *AIHandler) AskURL(c *gin.Context) {
 		URL string `json:"url"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		middleware.JSON(c, http.StatusBadRequest, contracts.Fail(contracts.AISY03003, "Submit a valid URL."))
+		middleware.RespondError(c, http.StatusBadRequest, contracts.AISY03003, "Submit a valid URL.", "parse ask-url request", err)
 		return
 	}
 	userID, err := h.optionalUser(c)
 	if err != nil {
-		middleware.JSON(c, http.StatusUnauthorized, contracts.Fail(contracts.AUTH01002, "Your session is invalid or has expired."))
+		middleware.RespondError(c, http.StatusUnauthorized, contracts.AUTH01002, "Your session is invalid or has expired.", "unauthorized ask-url caller", err)
 		return
 	}
 	// URL submissions are rate-limited much more strictly (5 per hour), and for
@@ -383,8 +383,7 @@ func (h *AIHandler) optionalUser(c *gin.Context) (*uuid.UUID, error) {
 func (h *AIHandler) respond(c *gin.Context, result services.AskResult, err error) {
 	if err != nil {
 		code, status := h.errorResponse(err)
-		logrus.WithError(err).WithField("errorCode", code).Error("ask job failed")
-		middleware.JSON(c, status, contracts.Fail(code, services.SanitizedErrorMessage(err)))
+		middleware.RespondError(c, status, code, services.SanitizedErrorMessage(err), "ask job failed", err)
 		return
 	}
 	middleware.JSON(c, http.StatusOK, contracts.OK(result))

@@ -11,7 +11,13 @@ func JSON(c *gin.Context, status int, body contracts.Envelope) { c.JSON(status, 
 func ErrorHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
-		if len(c.Errors) > 0 && !c.Writer.Written() { JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.AISY01001, "The service is temporarily unavailable.")) }
+		if len(c.Errors) > 0 && !c.Writer.Written() {
+			var cause error
+			if last := c.Errors.Last(); last != nil {
+				cause = last.Err
+			}
+			RespondError(c, http.StatusInternalServerError, contracts.AISY01001, "The service is temporarily unavailable.", "unhandled panic", cause)
+		}
 	}
 }
 
