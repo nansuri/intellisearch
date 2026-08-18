@@ -9,4 +9,4 @@ uploads/
 backend/data/
 *.log
 .DS_Store
-
+/temps
