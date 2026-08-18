@@ -662,7 +662,9 @@ func TestAdminPollinationsEndpoints(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/account/balance":
-			_, _ = w.Write([]byte(`{"balance": 9.5}`))
+			// The real endpoint returns a bare JSON number (JSON-quoted string
+			// when format=json is used); never an object.
+			_, _ = w.Write([]byte(`9.5`))
 		case "/account/profile":
 			_, _ = w.Write([]byte(`{"githubUsername":"dev","image":null,"communityEndpointsAllowed":false}`))
 		case "/account/key":

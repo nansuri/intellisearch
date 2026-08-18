@@ -115,6 +115,10 @@ const ADMN07002 = "ADMN07002"
 // ADMN07003 indicates a Pollinations media upload failed.
 const ADMN07003 = "ADMN07003"
 
+// ADMN07004 indicates the Pollinations API key is valid but lacks the account
+// scope the endpoint requires (e.g. account:usage or account:balance).
+const ADMN07004 = "ADMN07004"
+
 // NOTE01001 indicates the user's notes could not be loaded.
 const NOTE01001 = "NOTE01001"
 

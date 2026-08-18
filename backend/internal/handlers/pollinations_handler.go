@@ -64,6 +64,8 @@ func (h *PollinationsHandler) respond(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, services.ErrPollinationsUnauthorized):
 		middleware.JSON(c, http.StatusBadGateway, contracts.Fail(contracts.ADMN07002, "That Pollinations API key was rejected — check it's valid and has account access."))
+	case errors.Is(err, services.ErrPollinationsForbidden):
+		middleware.JSON(c, http.StatusBadGateway, contracts.Fail(contracts.ADMN07004, "That Pollinations API key is valid but lacks account access — create one with the account:usage / account:balance scopes on enter.pollinations.ai."))
 	case errors.Is(err, services.ErrPollinationsUploadFailed):
 		middleware.JSON(c, http.StatusBadGateway, contracts.Fail(contracts.ADMN07003, "The image could not be uploaded to Pollinations."))
 	default:

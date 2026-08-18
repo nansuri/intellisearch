@@ -9,6 +9,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -18,8 +19,11 @@ var (
 	// not be reached or returned an unexpected response.
 	ErrPollinationsUnavailable = errors.New("pollinations account request failed")
 	// ErrPollinationsUnauthorized indicates the Pollinations API key is
-	// missing, invalid, or lacks the required account scope.
+	// missing or invalid (upstream 401).
 	ErrPollinationsUnauthorized = errors.New("pollinations api key unauthorized")
+	// ErrPollinationsForbidden indicates the Pollinations API key is valid but
+	// lacks the account scope required by the endpoint (upstream 403).
+	ErrPollinationsForbidden = errors.New("pollinations api key missing account scope")
 	// ErrPollinationsUploadFailed indicates a Pollinations media upload failed.
 	ErrPollinationsUploadFailed = errors.New("pollinations upload failed")
 )
@@ -104,47 +108,82 @@ func NewPollinationsService(mediaBaseURL string) *PollinationsService {
 	}
 }
 
-// doJSON performs an authenticated GET and decodes a JSON envelope. A 401/403
-// maps to ErrPollinationsUnauthorized (the key is invalid or lacks scope);
-// anything else non-200 maps to ErrPollinationsUnavailable.
-func (s *PollinationsService) doJSON(ctx context.Context, baseURL, apiKey, path string, out any) error {
+// read performs an authenticated GET and returns the raw response body. A
+// 401 maps to ErrPollinationsUnauthorized (invalid key), a 403 to
+// ErrPollinationsForbidden (valid key without the account scope), and any
+// other non-200 status to ErrPollinationsUnavailable.
+func (s *PollinationsService) read(ctx context.Context, baseURL, apiKey, path string) ([]byte, error) {
 	requestURL := strings.TrimRight(baseURL, "/") + path
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
-		return ErrPollinationsUnavailable
+		return nil, ErrPollinationsUnavailable
 	}
 	request.Header.Set("Authorization", "Bearer "+apiKey)
 	request.Header.Set("Accept", "application/json")
 	response, err := s.client.Do(request)
 	if err != nil {
-		return ErrPollinationsUnavailable
+		return nil, ErrPollinationsUnavailable
 	}
 	defer response.Body.Close()
-	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
-		return ErrPollinationsUnauthorized
+	switch {
+	case response.StatusCode == http.StatusUnauthorized:
+		return nil, ErrPollinationsUnauthorized
+	case response.StatusCode == http.StatusForbidden:
+		return nil, ErrPollinationsForbidden
+	case response.StatusCode != http.StatusOK:
+		return nil, fmt.Errorf("%w: status %d", ErrPollinationsUnavailable, response.StatusCode)
 	}
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("%w: status %d", ErrPollinationsUnavailable, response.StatusCode)
+	return io.ReadAll(response.Body)
+}
+
+// doJSON performs an authenticated GET and decodes the JSON response body.
+func (s *PollinationsService) doJSON(ctx context.Context, baseURL, apiKey, path string, out any) error {
+	raw, err := s.read(ctx, baseURL, apiKey, path)
+	if err != nil {
+		return err
 	}
 	if out != nil {
-		if err := json.NewDecoder(response.Body).Decode(out); err != nil {
+		if err := json.Unmarshal(raw, out); err != nil {
 			return ErrPollinationsUnavailable
 		}
 	}
 	return nil
 }
 
+// decodeBalance parses the /account/balance body. The upstream endpoint may
+// return a bare JSON number (no format param), a JSON-quoted number string
+// (with format=json), or an object with a "balance" field — accept all three.
+func decodeBalance(raw []byte) (float64, error) {
+	var f float64
+	if err := json.Unmarshal(raw, &f); err == nil {
+		return f, nil
+	}
+	var quoted string
+	if err := json.Unmarshal(raw, &quoted); err == nil {
+		return strconv.ParseFloat(quoted, 64)
+	}
+	var object struct {
+		Balance json.Number `json:"balance"`
+	}
+	if err := json.Unmarshal(raw, &object); err == nil && object.Balance.String() != "" && object.Balance.String() != "null" {
+		if f, err := strconv.ParseFloat(object.Balance.String(), 64); err == nil {
+			return f, nil
+		}
+	}
+	return 0, errors.New("unexpected /account/balance response")
+}
+
 // Account returns the balance, profile, and key info in one call (three
 // parallel GETs to /account/balance, /account/profile, /account/key).
 func (s *PollinationsService) Account(ctx context.Context, baseURL, apiKey string) (balance float64, profile *PollinationsProfile, key *PollinationsKeyInfo, err error) {
-	type balanceResult struct {
-		Balance float64 `json:"balance"`
-	}
-	var balancePayload balanceResult
-	if err := s.doJSON(ctx, baseURL, apiKey, "/account/balance", &balancePayload); err != nil {
+	raw, err := s.read(ctx, baseURL, apiKey, "/account/balance")
+	if err != nil {
 		return 0, nil, nil, err
 	}
-	balance = balancePayload.Balance
+	balance, err = decodeBalance(raw)
+	if err != nil {
+		return 0, nil, nil, ErrPollinationsUnavailable
+	}
 
 	var profilePayload PollinationsProfile
 	if err := s.doJSON(ctx, baseURL, apiKey, "/account/profile", &profilePayload); err == nil {
