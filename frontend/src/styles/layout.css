@@ -28,7 +28,7 @@
 .header-center { width: min(760px, 100%); }
 .header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; grid-column: 3; }
 .result-page { padding-bottom: 0; }
-.result-content { width: min(760px, 100%); max-width: 100%; margin: 54px auto 100px; }
+.result-content { width: min(760px, 100%); max-width: 100%; margin: 54px auto 100px; /* Prevent any child from creating a horizontal scrollbar on the whole result page. Wide elements inside (tables, mermaid diagrams, code) handle their own scrolling. */ overflow-x: hidden; }
 .account-content { width: min(920px, 100%); margin: 64px auto 100px; }
 .persistent-ask { position: sticky; bottom: 0; z-index: 5; padding: 16px 0 20px; border-top: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent); background: color-mix(in srgb, var(--color-bg) 92%, transparent); backdrop-filter: blur(16px); }
 .persistent-ask > div { width: min(780px, 100%); margin: auto; }

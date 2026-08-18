@@ -13,7 +13,10 @@
   justify-content: center;
   width: min(660px, 100%);
   margin: 0 auto;
-  padding: 0;
+  /* Shift the vertical center point upward so the title sits in the
+     upper-middle area rather than the true geometric center (which feels
+     low because the eye expects the title above the midline). */
+  padding-bottom: 14vh;
   text-align: center;
 }
 /* The title + ask box are one centered unit; the history/suggestions panel
@@ -35,7 +38,7 @@
 /* Long unbroken tokens (URLs, code strings) in an answer or follow-up must wrap
    inside the device width instead of blowing out the page horizontally. */
 .summary-card > p, .follow-up-question, .collapsed-chip-preview, .search-only-note, .empty-sources p, .map-card-center { overflow-wrap: anywhere; }
-.summary-card { display: grid; gap: 16px; margin-top: 38px; padding: 0 0 28px; border-bottom: 1px solid var(--color-border); }
+.summary-card { display: grid; gap: 16px; min-width: 0; margin-top: 38px; padding: 0 0 28px; border-bottom: 1px solid var(--color-border); }
 .summary-card > p { margin: 0; color: var(--color-text); font-size: 1.04rem; line-height: 1.75; }
 .summary-note { color: var(--color-muted); }
 .sources { margin-top: 42px; }

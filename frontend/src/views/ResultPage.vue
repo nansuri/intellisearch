@@ -522,7 +522,7 @@ watch(
 </template>
 
 <style scoped>
-.search-results-only { margin-top: 38px; padding: 0 0 28px; border-bottom: 1px solid var(--color-border); }
+.search-results-only { min-width: 0; margin-top: 38px; padding: 0 0 28px; border-bottom: 1px solid var(--color-border); }
 .search-results-head { display: flex; align-items: end; justify-content: space-between; gap: 18px; }
 .search-results-title { margin: 6px 0 0; font-size: 1.35rem; letter-spacing: -.03em; }
 .search-upgrade { flex: 0 0 auto; }

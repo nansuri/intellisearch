@@ -88,6 +88,10 @@ function collapse() { emit('update:collapsed', true) }
 .collapsible-answer {
   display: grid;
   gap: 16px;
+  /* min-width: 0 lets the grid shrink below its content width so wide
+     markdown (tables, long URLs, code) stays inside the parent container
+     on narrow / foldable screens. */
+  min-width: 0;
   margin-top: 38px;
   padding: 0 0 28px;
   border-bottom: 1px solid var(--color-border);
