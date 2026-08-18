@@ -92,7 +92,10 @@ async function logout() { await auth.logout(); router.push('/login') }
           <div class="admin-header-copy"><strong>{{ currentPage }}</strong><span class="admin-header-mobile-label">{{ site.settings?.siteName || 'Control Panel' }}</span></div>
         </div>
         <div class="admin-header-actions">
-          <router-link class="admin-site-link admin-site-link--desktop" to="/">View site &#8599;</router-link>
+          <router-link class="admin-site-link" to="/" aria-label="View site">
+            <svg class="admin-site-link-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /><path d="M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>
+            <span class="admin-site-link-label">View site</span>
+          </router-link>
           <ThemeToggle />
           <span class="status-pill">Super Owner</span>
           <span class="admin-avatar"><Avatar :name="auth.user?.name || 'Owner'" :avatar-url="auth.user?.avatarUrl" /></span>
