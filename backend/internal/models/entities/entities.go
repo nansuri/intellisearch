@@ -117,10 +117,14 @@ type ImageResult struct {
 	Title        string    `gorm:"not null" json:"title"`
 	URL          string    `gorm:"type:text;not null" json:"url"`
 	ThumbnailURL string    `gorm:"type:text;not null" json:"thumbnailUrl"`
-	Source       string    `gorm:"not null" json:"source"`
-	Width        int       `json:"width"`
-	Height       int       `json:"height"`
-	CreatedAt    time.Time `json:"createdAt"`
+	// FullURL is the full-size image (SearXNG img_src) when the source provided
+	// one; empty falls back to the thumbnail for zoom/download. Persisted so
+	// restored sessions keep the full-size view.
+	FullURL   string    `gorm:"type:text" json:"fullUrl,omitempty"`
+	Source    string    `gorm:"not null" json:"source"`
+	Width     int       `json:"width"`
+	Height    int       `json:"height"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 type SearchResult struct {

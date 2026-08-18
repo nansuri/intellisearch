@@ -1,31 +1,62 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import type { ImageItem } from '../services/api'
+import ImageLightbox from './ImageLightbox.vue'
 
-defineProps<{ images: ImageItem[] }>()
+const props = defineProps<{ images: ImageItem[] }>()
+
+// Thumbnails that failed to load are dropped from the grid (and its count).
+const broken = ref<Set<number>>(new Set())
+const visible = computed(() => props.images.filter((image) => !broken.value.has(image.position)))
+const lightboxIndex = ref<number | null>(null)
+
+function onThumbError(image: ImageItem) {
+  broken.value = new Set(broken.value).add(image.position)
+  // If the failing image is the one being viewed, close the viewer.
+  if (lightboxIndex.value !== null && visible.value[lightboxIndex.value]?.position === image.position) {
+    lightboxIndex.value = null
+  }
+}
+
+function openLightbox(index: number) {
+  lightboxIndex.value = index
+}
 </script>
 
 <template>
-  <section v-if="images.length" class="image-grid" aria-label="Image results">
+  <section v-if="visible.length" class="image-grid" aria-label="Image results">
     <div class="image-grid-head">
       <div class="section-label">Images</div>
-      <span class="image-grid-count">{{ images.length }} found</span>
+      <span class="image-grid-count">{{ visible.length }} found</span>
     </div>
     <div class="image-grid-cards">
-      <a
-        v-for="image in images"
+      <button
+        v-for="(image, index) in visible"
         :key="image.position"
+        type="button"
         class="image-card"
-        :href="image.url"
-        target="_blank"
-        rel="noopener noreferrer"
         :title="image.title"
+        @click="openLightbox(index)"
       >
         <span class="image-card-frame">
-          <img :src="image.thumbnailUrl" :alt="image.title" loading="lazy" referrerpolicy="no-referrer" />
+          <img
+            :src="image.thumbnailUrl"
+            :alt="image.title"
+            loading="lazy"
+            referrerpolicy="no-referrer"
+            @error="onThumbError(image)"
+          />
         </span>
         <span class="image-card-title">{{ image.title }}</span>
-      </a>
+      </button>
     </div>
+
+    <ImageLightbox
+      v-if="lightboxIndex !== null && visible[lightboxIndex]"
+      :images="visible"
+      :index="lightboxIndex"
+      @close="lightboxIndex = null"
+    />
   </section>
 </template>
 
@@ -47,7 +78,8 @@ defineProps<{ images: ImageItem[] }>()
   border-radius: 14px;
   background: var(--color-surface);
   color: inherit;
-  text-decoration: none;
+  text-align: left;
+  cursor: zoom-in;
   transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease;
 }
 .image-card:hover {

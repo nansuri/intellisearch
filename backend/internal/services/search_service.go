@@ -27,9 +27,13 @@ type ImageItem struct {
 	Title        string `json:"title"`
 	URL          string `json:"url"`
 	ThumbnailURL string `json:"thumbnailUrl"`
-	Source       string `json:"source"`
-	Width        int    `json:"width,omitempty"`
-	Height       int    `json:"height,omitempty"`
+	// FullURL is the full-size image (SearXNG img_src), falling back to the
+	// thumbnail when the source only provides one. The frontend uses it for
+	// the lightbox zoom and download.
+	FullURL string `json:"fullUrl,omitempty"`
+	Source  string `json:"source"`
+	Width   int    `json:"width,omitempty"`
+	Height  int    `json:"height,omitempty"`
 }
 type SearchService struct {
 	baseURL string
@@ -116,6 +120,7 @@ func (s *SearchService) SearchImages(ctx context.Context, query string, limit in
 			Title:        result.Title,
 			URL:          result.URL,
 			ThumbnailURL: firstNonEmpty(result.ThumbnailSrc, result.ImgSrc),
+			FullURL:      firstNonEmpty(result.ImgSrc, result.ThumbnailSrc),
 			Source:       result.Source,
 			Width:        width,
 			Height:       height,

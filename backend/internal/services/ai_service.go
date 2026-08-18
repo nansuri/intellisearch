@@ -334,7 +334,7 @@ func (s *AIService) collectFromSearch(ctx context.Context, query string, message
 	} else if len(images) > 0 {
 		rows := make([]entities.ImageResult, 0, len(images))
 		for _, image := range images {
-			rows = append(rows, entities.ImageResult{MessageID: messageID, Position: image.Position, Title: image.Title, URL: image.URL, ThumbnailURL: image.ThumbnailURL, Source: image.Source, Width: image.Width, Height: image.Height})
+			rows = append(rows, entities.ImageResult{MessageID: messageID, Position: image.Position, Title: image.Title, URL: image.URL, ThumbnailURL: image.ThumbnailURL, FullURL: image.FullURL, Source: image.Source, Width: image.Width, Height: image.Height})
 		}
 		if err := s.messages.CreateImages(rows); err != nil {
 			logrus.WithError(err).Warn("image results persist failed; continuing without images")

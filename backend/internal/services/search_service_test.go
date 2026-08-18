@@ -28,11 +28,12 @@ func TestSearchImagesParsesSearXNGImageResults(t *testing.T) {
 		t.Fatalf("expected a single capped image, got %#v (err=%v)", capped, err)
 	}
 	first := images[0]
-	if first.Position != 1 || first.ThumbnailURL != "https://photos.example.com/a-thumb.jpg" || first.Width != 1920 || first.Height != 1080 {
+	if first.Position != 1 || first.ThumbnailURL != "https://photos.example.com/a-thumb.jpg" || first.FullURL != "https://photos.example.com/a.jpg" || first.Width != 1920 || first.Height != 1080 {
 		t.Fatalf("unexpected first image: %#v", first)
 	}
-	// A missing thumbnail falls back to the full image URL; bad resolution → 0x0.
-	if images[1].ThumbnailURL != "https://photos.example.com/b.jpg" || images[1].Width != 0 || images[1].Height != 0 {
+	// A missing thumbnail falls back to the full image URL (fullUrl mirrors it
+	// when there is no separate img_src); bad resolution → 0x0.
+	if images[1].ThumbnailURL != "https://photos.example.com/b.jpg" || images[1].FullURL != "https://photos.example.com/b.jpg" || images[1].Width != 0 || images[1].Height != 0 {
 		t.Fatalf("unexpected fallback image: %#v", images[1])
 	}
 }

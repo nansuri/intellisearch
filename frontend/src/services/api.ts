@@ -78,7 +78,7 @@ export async function upload<T>(path: string, field: string, file: File): Promis
 
 export type SiteSettings = { siteName: string; logoUrl: string | null; faviconUrl: string | null; tagline: string | null; copyright: string | null; googleSsoEnabled?: boolean }
 export type Source = { position: number; title: string; url: string; domain: string; snippet: string }
-export type ImageItem = { position: number; title: string; url: string; thumbnailUrl: string; source?: string; width?: number; height?: number }
+export type ImageItem = { position: number; title: string; url: string; thumbnailUrl: string; fullUrl?: string; source?: string; width?: number; height?: number }
 
 export type GeoLocation = { latitude: number; longitude: number; accuracy?: number }
 export type AskMode = 'enhanced' | 'search'
