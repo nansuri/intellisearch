@@ -148,6 +148,30 @@ func TestHistoryRecentDetailedSkipsMissingMessages(t *testing.T) {
 	}
 }
 
+func TestHistoryPaginatedDetailedReturnsTotalAndPage(t *testing.T) {
+	service, db, userID, _ := newHistoryTestEnv(t, `["a"]`)
+	seedHistoryWithAnswers(t, db, userID, "alpha", "beta", "gamma")
+	// Page 1 of 2 (page_size=2) should return the 2 newest items and total=3.
+	items, total, err := service.PaginatedDetailed(userID, 1, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 3 {
+		t.Fatalf("expected total=3, got %d", total)
+	}
+	if len(items) != 2 || items[0].Query != "gamma" || items[1].Query != "beta" {
+		t.Fatalf("unexpected page 1: %#v", items)
+	}
+	// Page 2 returns the last item.
+	items, total, err = service.PaginatedDetailed(userID, 2, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 3 || len(items) != 1 || items[0].Query != "alpha" {
+		t.Fatalf("unexpected page 2: total=%d items=%#v", total, items)
+	}
+}
+
 func TestHistoryClearRemovesOnlyOwnEntries(t *testing.T) {
 	service, db, userID, _ := newHistoryTestEnv(t, `["a"]`)
 	seedHistory(t, db, userID, "one", "two")

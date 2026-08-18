@@ -573,6 +573,40 @@ func TestSearchHistoryEndpoints(t *testing.T) {
 		t.Fatalf("suggestions should degrade to empty list: %d %s", status, payload)
 	}
 
+	// Paginated mode: page=1&page_size=2 returns the 2 most recent items + total.
+	status, payload = call(t, server, http.MethodGet, "/api/v1/me/history?page=1&page_size=2", token, nil)
+	if status != http.StatusOK {
+		t.Fatalf("paginated history failed: %d %s", status, payload)
+	}
+	var paginated struct {
+		Data struct {
+			Items    []struct{ Query string `json:"query"` } `json:"items"`
+			Total    int64  `json:"total"`
+			Page     int    `json:"page"`
+			PageSize int    `json:"pageSize"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(payload, &paginated); err != nil {
+		t.Fatal(err)
+	}
+	if paginated.Data.Total != 3 || paginated.Data.Page != 1 || paginated.Data.PageSize != 2 {
+		t.Fatalf("unexpected pagination metadata: total=%d page=%d pageSize=%d (%s)", paginated.Data.Total, paginated.Data.Page, paginated.Data.PageSize, payload)
+	}
+	if len(paginated.Data.Items) != 2 || paginated.Data.Items[0].Query != "cheapest flights" {
+		t.Fatalf("unexpected page 1 items: %s", payload)
+	}
+	// Page 2 returns the remaining item.
+	status, payload = call(t, server, http.MethodGet, "/api/v1/me/history?page=2&page_size=2", token, nil)
+	if status != http.StatusOK {
+		t.Fatalf("page 2 failed: %d %s", status, payload)
+	}
+	if err := json.Unmarshal(payload, &paginated); err != nil {
+		t.Fatal(err)
+	}
+	if paginated.Data.Total != 3 || len(paginated.Data.Items) != 1 {
+		t.Fatalf("unexpected page 2: total=%d items=%d (%s)", paginated.Data.Total, len(paginated.Data.Items), payload)
+	}
+
 	// Clearing wipes jane's history only.
 	status, payload = call(t, server, http.MethodDelete, "/api/v1/me/history", token, nil)
 	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"cleared":true`)) {

@@ -1,18 +1,24 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppHeader from '../components/AppHeader.vue'
 import ConfirmModal from '../components/ConfirmModal.vue'
 import { useToastStore } from '../stores/toast'
-import { getHistory, clearHistory, type HistoryItem } from '../services/api'
+import { getHistoryPage, clearHistory, type HistoryItem } from '../services/api'
+
+const PAGE_SIZE = 20
 
 const router = useRouter()
 const toast = useToastStore()
 const items = ref<HistoryItem[]>([])
+const page = ref(1)
+const total = ref(0)
 const loading = ref(true)
+const loadingMore = ref(false)
 const error = ref(false)
 const clearing = ref(false)
 const confirmClear = ref(false)
+const hasMore = computed(() => items.value.length < total.value)
 
 function timeAgo(iso: string): string {
   const seconds = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
@@ -30,12 +36,31 @@ function timeAgo(iso: string): string {
 async function load() {
   loading.value = true
   error.value = false
+  page.value = 1
   try {
-    items.value = (await getHistory(100)).items
+    const result = await getHistoryPage(1, PAGE_SIZE)
+    items.value = result.items
+    total.value = result.total
   } catch {
     error.value = true
   } finally {
     loading.value = false
+  }
+}
+
+async function loadMore() {
+  if (!hasMore.value || loadingMore.value) return
+  loadingMore.value = true
+  try {
+    const nextPage = page.value + 1
+    const result = await getHistoryPage(nextPage, PAGE_SIZE)
+    items.value = [...items.value, ...result.items]
+    page.value = nextPage
+    total.value = result.total
+  } catch {
+    // Silently fail on load-more; existing items remain visible.
+  } finally {
+    loadingMore.value = false
   }
 }
 
@@ -44,6 +69,7 @@ async function clearAll() {
   try {
     await clearHistory()
     items.value = []
+    total.value = 0
     confirmClear.value = false
     toast.success('Search history cleared.')
   } catch (e) {
@@ -95,7 +121,7 @@ onMounted(load)
 
       <section v-else class="settings-card">
         <div class="setting-title">
-          <div><div class="section-label">Past searches</div><h2>{{ items.length }} search{{ items.length === 1 ? '' : 'es' }}</h2><p>Click a search to run it again. Summaries are pulled from your chat sessions on demand.</p></div>
+          <div><div class="section-label">Past searches</div><h2>{{ total }} search{{ total === 1 ? '' : 'es' }}</h2><p>Click a search to run it again. Summaries are pulled from your chat sessions on demand.</p></div>
         </div>
         <ul class="history-list">
           <li v-for="item in items" :key="item.id" class="history-item">
@@ -107,6 +133,11 @@ onMounted(load)
             <span class="history-time">{{ timeAgo(item.createdAt) }}</span>
           </li>
         </ul>
+        <div v-if="hasMore" class="history-load-more">
+          <button type="button" class="base-button button-secondary" :disabled="loadingMore" @click="loadMore">
+            {{ loadingMore ? 'Loading…' : 'Load more' }}
+          </button>
+        </div>
       </section>
     </section>
 
@@ -141,5 +172,6 @@ onMounted(load)
 }
 .history-summary--muted { font-style: italic; }
 .history-time { flex-shrink: 0; align-self: flex-start; padding-top: 3px; color: var(--color-muted); font-size: .74rem; }
+.history-load-more { display: flex; justify-content: center; margin-top: 18px; }
 @media (max-width: 520px) { .history-item { align-items: flex-start; flex-direction: column; gap: 4px; } }
 </style>

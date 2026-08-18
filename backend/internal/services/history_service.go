@@ -74,6 +74,26 @@ func (s *SearchHistoryService) RecentDetailed(userID uuid.UUID, limit int) ([]Hi
 	if err != nil {
 		return nil, err
 	}
+	return s.hydrateSummaries(entries)
+}
+
+// PaginatedDetailed returns a page of the user's history with on-demand
+// summaries plus the total row count for pagination metadata.
+func (s *SearchHistoryService) PaginatedDetailed(userID uuid.UUID, page, pageSize int) ([]HistoryItem, int64, error) {
+	entries, total, err := s.history.Paginated(userID, page, pageSize)
+	if err != nil {
+		return nil, 0, err
+	}
+	items, err := s.hydrateSummaries(entries)
+	if err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
+}
+
+// hydrateSummaries enriches raw search_history rows with truncated AI answer
+// summaries extracted from the messages table.
+func (s *SearchHistoryService) hydrateSummaries(entries []entities.SearchHistory) ([]HistoryItem, error) {
 	messageIDs := make([]uuid.UUID, 0, len(entries))
 	for _, entry := range entries {
 		if entry.MessageID != nil {
@@ -81,6 +101,7 @@ func (s *SearchHistoryService) RecentDetailed(userID uuid.UUID, limit int) ([]Hi
 		}
 	}
 	summaries := map[uuid.UUID]string{}
+	var err error
 	if len(messageIDs) > 0 {
 		if summaries, err = s.messages.Summaries(messageIDs); err != nil {
 			return nil, err

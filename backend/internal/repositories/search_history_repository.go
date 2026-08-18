@@ -24,6 +24,33 @@ func (r *SearchHistoryRepository) Recent(userID uuid.UUID, limit int) ([]entitie
 	return entries, err
 }
 
+// Paginated returns a page of the user's history entries (newest first) plus
+// the total row count for pagination metadata.
+func (r *SearchHistoryRepository) Paginated(userID uuid.UUID, page, pageSize int) ([]entities.SearchHistory, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+	var total int64
+	query := r.db.Model(&entities.SearchHistory{}).Where("user_id = ?", userID)
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	offset := (page - 1) * pageSize
+	var entries []entities.SearchHistory
+	err := query.Order("created_at desc").Offset(offset).Limit(pageSize).Find(&entries).Error
+	return entries, total, err
+}
+
+// CountByUser returns the total number of history entries for a user.
+func (r *SearchHistoryRepository) CountByUser(userID uuid.UUID) (int64, error) {
+	var count int64
+	err := r.db.Model(&entities.SearchHistory{}).Where("user_id = ?", userID).Count(&count).Error
+	return count, err
+}
+
 // RecentDistinct returns the user's most recently used queries without
 // duplicates (each query appears once, ordered by its latest use). The GROUP BY
 // works identically on SQLite and PostgreSQL.

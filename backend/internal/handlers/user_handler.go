@@ -74,7 +74,39 @@ func (h *UserHandler) UpdateMe(c *gin.Context) {
 
 // History returns the signed-in user's recent searches, newest first, each with
 // an on-demand summary of the answer (truncated server-side).
+//
+// Supports two modes:
+//   - Legacy: ?limit=N (returns all items up to N, no total count)
+//   - Paginated: ?page=N&page_size=M (returns a page with total count)
 func (h *UserHandler) History(c *gin.Context) {
+	userID := c.MustGet(middleware.UserIDKey).(uuid.UUID)
+
+	// Paginated mode: page + page_size
+	pageRaw := c.Query("page")
+	if pageRaw != "" {
+		page, err := strconv.Atoi(pageRaw)
+		if err != nil || page < 1 {
+			page = 1
+		}
+		pageSize := 20
+		if psRaw := c.Query("page_size"); psRaw != "" {
+			if parsed, err := strconv.Atoi(psRaw); err == nil && parsed > 0 {
+				pageSize = parsed
+			}
+		}
+		if pageSize > 100 {
+			pageSize = 100
+		}
+		items, total, err := h.history.PaginatedDetailed(userID, page, pageSize)
+		if err != nil {
+			middleware.RespondError(c, http.StatusInternalServerError, contracts.USER03001, "Your search history could not be loaded.", "search history load failed", err)
+			return
+		}
+		middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"items": items, "total": total, "page": page, "pageSize": pageSize}))
+		return
+	}
+
+	// Legacy mode: ?limit=N (backward-compatible for main page chips)
 	limit := 20
 	if raw := c.Query("limit"); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
@@ -84,7 +116,7 @@ func (h *UserHandler) History(c *gin.Context) {
 	if limit > 100 {
 		limit = 100
 	}
-	entries, err := h.history.RecentDetailed(c.MustGet(middleware.UserIDKey).(uuid.UUID), limit)
+	entries, err := h.history.RecentDetailed(userID, limit)
 	if err != nil {
 		middleware.RespondError(c, http.StatusInternalServerError, contracts.USER03001, "Your search history could not be loaded.", "search history load failed", err)
 		return
