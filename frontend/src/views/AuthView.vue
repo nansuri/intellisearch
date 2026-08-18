@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useSiteStore } from '../stores/site'
+import { trackRegisterVisit } from '../services/api'
 import FormField from '../components/FormField.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
 
@@ -36,6 +37,16 @@ watch(() => route.query.mode, (next) => {
   if (parsed !== mode.value) mode.value = parsed
 })
 
+// Best-effort: record that a unique visitor opened the register page so the
+// Owner Control Panel can measure registration interest. The server dedupes by
+// visitor token, so re-opening the tab never inflates the count.
+function trackRegister() {
+  trackRegisterVisit().catch(() => {})
+}
+watch(mode, (next) => {
+  if (next === 'register') trackRegister()
+})
+
 async function submit() {
   if (busy.value || done.value) return
   error.value = ''
@@ -57,6 +68,8 @@ function googleSignIn() { window.location.href = '/api/v1/auth/google' }
 onMounted(() => {
   const fromQuery = typeof route.query.error === 'string' ? route.query.error : ''
   if (fromQuery) queryError.value = fromQuery
+  // The mode watcher only fires on change; track the initial register landing too.
+  if (mode.value === 'register') trackRegister()
 })
 </script>
 <template>

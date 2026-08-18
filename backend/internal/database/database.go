@@ -39,7 +39,7 @@ func seedSingleton(db *gorm.DB, id uint, seed any) error {
 }
 
 func MigrateAndSeed(db *gorm.DB, cfg config.Config) error {
-	if err := db.AutoMigrate(&entities.User{}, &entities.SiteSettings{}, &entities.AIQueueConfig{}, &entities.AIProvider{}, &entities.ChatSession{}, &entities.Message{}, &entities.SearchResult{}, &entities.ImageResult{}, &entities.UsageLog{}, &entities.CrawlJob{}, &entities.SearchHistory{}, &entities.AnonymousUsage{}, &entities.Note{}, &entities.MapPoint{}); err != nil {
+	if err := db.AutoMigrate(&entities.User{}, &entities.SiteSettings{}, &entities.AIQueueConfig{}, &entities.AIProvider{}, &entities.ChatSession{}, &entities.Message{}, &entities.SearchResult{}, &entities.ImageResult{}, &entities.UsageLog{}, &entities.CrawlJob{}, &entities.SearchHistory{}, &entities.AnonymousUsage{}, &entities.Note{}, &entities.MapPoint{}, &entities.RegisterVisit{}); err != nil {
 		return err
 	}
 	if err := seedSingleton(db, 1, &entities.SiteSettings{ID: 1, SiteName: "Intellisearch"}); err != nil {

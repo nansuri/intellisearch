@@ -33,7 +33,8 @@ onMounted(load)
 const tiles = [
   { to: '/admin/users', label: 'User management', desc: 'Search, create, edit, suspend, and delete accounts.', icon: 'user-list' },
   { to: '/admin/users/suspended', label: 'Suspended users', desc: 'Review and reinstate suspended accounts.', icon: 'suspended' },
-  { to: '/admin/stats', label: 'Statistics', desc: 'Platform activity, trends, and top queries.', icon: 'chart' },
+  { to: '/admin/stats', label: 'Statistics', desc: 'Platform activity, trends, and visitor summaries.', icon: 'chart' },
+  { to: '/admin/stats/visitors', label: 'Unique visitors', desc: 'Registered, active, anonymous, and register-page visitors.', icon: 'users' },
   { to: '/admin/stats/words', label: 'Trending words', desc: 'Most-searched terms over time — queries stay masked.', icon: 'chart' },
   { to: '/admin/stats/usage', label: 'Per-user usage', desc: 'Who asks the most, and who fails the most.', icon: 'usage' },
   { to: '/admin/stats/ai', label: 'AI service', desc: 'Success rate, errors, latency, and queue health.', icon: 'robot' },

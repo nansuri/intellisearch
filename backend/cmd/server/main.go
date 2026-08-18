@@ -55,10 +55,13 @@ func main() {
 	llmService := services.NewLLMService(providerRepository, cfg.EncryptionKey)
 	geoService := services.NewGeoService(cfg.NominatimBaseURL, "Intellisearch/1.0", cfg.NominatimTimeoutMS)
 	aiService := services.NewAIService(sessionRepository, messageRepository, usageLogRepository, providerRepository, userRepository, searchHistoryRepository, queueConfigRepository, searchService, crawlService, llmService, geoService, cfg.CrawlTopN)
-	aiHandler := handlers.NewAIHandler(aiService, queueConfigRepository, userRepository, usageLogRepository, repositories.NewAnonymousUsageRepository(db), limiter, authService)
+	anonymousUsageRepository := repositories.NewAnonymousUsageRepository(db)
+	registerVisitRepository := repositories.NewRegisterVisitRepository(db)
+	aiHandler := handlers.NewAIHandler(aiService, queueConfigRepository, userRepository, usageLogRepository, anonymousUsageRepository, limiter, authService)
 	adminService := services.NewAdminService(providerRepository, queueConfigRepository, repositories.NewSiteRepository(db), cfg.EncryptionKey, cfg.UploadsDir)
-	statsService := services.NewStatsService(usageLogRepository, userRepository, providerRepository, aiHandler)
+	statsService := services.NewStatsService(usageLogRepository, userRepository, providerRepository, aiHandler, anonymousUsageRepository, registerVisitRepository)
 	adminHandler := handlers.NewAdminHandler(userService, adminService, statsService, services.NewOllamaService())
+	visitorHandler := handlers.NewVisitorHandler(registerVisitRepository)
 	sessionHandler := handlers.NewSessionHandler(sessionRepository, messageRepository, authService)
 	historyService := services.NewSearchHistoryService(searchHistoryRepository, messageRepository, llmService, queueConfigRepository)
 	noteService := services.NewNoteService(repositories.NewNoteRepository(db))
@@ -66,7 +69,7 @@ func main() {
 	appsHandler := handlers.NewAppsHandler(noteService, translateService, limiter)
 	pollinationsHandler := handlers.NewPollinationsHandler(adminService, services.NewPollinationsService(cfg.PollinationsMediaBaseURL))
 
-	api := router.New(cfg.CORSOrigins, cfg.UploadsDir, siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService, historyService), sessionHandler, aiHandler, adminHandler, appsHandler, pollinationsHandler, authService)
+	api := router.New(cfg.CORSOrigins, cfg.UploadsDir, siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService, historyService), sessionHandler, aiHandler, adminHandler, appsHandler, pollinationsHandler, visitorHandler, authService)
 	// Only the configured proxies may supply X-Forwarded-For; everything else is
 	// ignored so clients cannot spoof the client IP used for the anonymous
 	// per-IP AI allowance and rate limiting.

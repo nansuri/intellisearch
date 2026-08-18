@@ -178,7 +178,7 @@ func TestStatsAggregation(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	stats := NewStatsService(repositories.NewUsageLogRepository(db), repositories.NewUserRepository(db), repositories.NewProviderRepository(db), nil)
+	stats := NewStatsService(repositories.NewUsageLogRepository(db), repositories.NewUserRepository(db), repositories.NewProviderRepository(db), nil, nil, nil)
 	result, err := stats.AIStats("")
 	if err != nil {
 		t.Fatal(err)

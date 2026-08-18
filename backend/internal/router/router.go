@@ -11,7 +11,7 @@ import (
 	"intellisearch/internal/services"
 )
 
-func New(corsOrigins, uploadsDir string, siteService *services.SiteService, authHandler *handlers.AuthHandler, userHandler *handlers.UserHandler, sessionHandler *handlers.SessionHandler, aiHandler *handlers.AIHandler, adminHandler *handlers.AdminHandler, appsHandler *handlers.AppsHandler, pollinationsHandler *handlers.PollinationsHandler, authService *services.AuthService) *gin.Engine {
+func New(corsOrigins, uploadsDir string, siteService *services.SiteService, authHandler *handlers.AuthHandler, userHandler *handlers.UserHandler, sessionHandler *handlers.SessionHandler, aiHandler *handlers.AIHandler, adminHandler *handlers.AdminHandler, appsHandler *handlers.AppsHandler, pollinationsHandler *handlers.PollinationsHandler, visitorHandler *handlers.VisitorHandler, authService *services.AuthService) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery(), middleware.ErrorHandler())
 	r.Use(cors(corsOrigins))
@@ -41,6 +41,7 @@ func New(corsOrigins, uploadsDir string, siteService *services.SiteService, auth
 	v1.GET("/auth/google/callback", authHandler.GoogleCallback)
 	v1.POST("/ask", aiHandler.Ask)
 	v1.POST("/ask/url", aiHandler.AskURL)
+	v1.POST("/stats/register-visit", visitorHandler.TrackRegisterVisit)
 	v1.GET("/sessions/:id", sessionHandler.Get)
 	protected := v1.Group("")
 	protected.Use(middleware.RequireAuth(authService))
@@ -69,6 +70,7 @@ func New(corsOrigins, uploadsDir string, siteService *services.SiteService, auth
 	admin.GET("/stats", adminHandler.Stats)
 	admin.GET("/stats/trends", adminHandler.Trends)
 	admin.GET("/stats/trending-words", adminHandler.TrendingWords)
+	admin.GET("/stats/visitors", adminHandler.Visitors)
 	admin.GET("/stats/ai", adminHandler.AIStats)
 	admin.GET("/ai/providers", adminHandler.ListProviders)
 	admin.POST("/ai/providers", adminHandler.CreateProvider)

@@ -198,6 +198,19 @@ type AnonymousUsage struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+// RegisterVisit records a unique visitor who opened the register page. One row
+// per visitor token (the unique index makes replays no-ops), so the Owner
+// Control Panel can compare how many people actually tried to register against
+// how many accounts exist. The IP hash is informational only — it is kept
+// non-unique because shared/office networks would otherwise undercount.
+type RegisterVisit struct {
+	ID        uint64    `gorm:"primaryKey" json:"id"`
+	VisitorID uuid.UUID `gorm:"type:uuid;uniqueIndex" json:"visitorId"`
+	IPHash    string    `gorm:"type:varchar(64)" json:"-"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
 type CrawlJob struct {
 	ID         uuid.UUID  `gorm:"type:uuid;primaryKey" json:"id"`
 	UserID     *uuid.UUID `gorm:"type:uuid;index" json:"userId,omitempty"`

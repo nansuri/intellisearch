@@ -116,6 +116,18 @@ func (h *AdminHandler) Stats(c *gin.Context) {
 	middleware.JSON(c, http.StatusOK, contracts.OK(stats))
 }
 
+// Visitors returns the unique user/visitor summary for the control panel:
+// registered accounts, active users, anonymous AI visitors, and unique
+// register-page visitors — each with daily/weekly trends.
+func (h *AdminHandler) Visitors(c *gin.Context) {
+	stats, err := h.stats.VisitorStats()
+	if err != nil {
+		middleware.JSON(c, http.StatusInternalServerError, contracts.Fail(contracts.STTS01001, "Visitor statistics could not be computed."))
+		return
+	}
+	middleware.JSON(c, http.StatusOK, contracts.OK(stats))
+}
+
 func (h *AdminHandler) AIStats(c *gin.Context) {
 	stats, err := h.stats.AIStats(c.Query("type"))
 	if err != nil {

@@ -164,6 +164,16 @@
 
 > One row claims the single **anonymous AI-usage allowance** for a visitor token **and** an IP (both unique). A row's existence means that visitor/IP already used its one guest AI search — so clearing cookies or localStorage cannot reset the count, and only the proxy-verified IP (see `TRUSTED_PROXIES`) is hashed. Signed-in users are exempt; `mode=search` asks run no LLM and don't consume the allowance. Deliberately DB-backed so the limit survives Redis downtime. Rejection → `AISY02004` (429).
 
+### register_page_visits
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | bigserial (PK) | |
+| visitor_id | UUID (unique) | same server-issued guest token as `anonymous_usage` (httpOnly cookie / `X-Visitor-ID`) |
+| ip_hash | varchar(64) | SHA-256 of the client IP — informational only, **not unique** (shared/office networks would otherwise undercount) |
+| created_at / updated_at | timestamptz | |
+
+> One row per visitor who **opened the register page** (sign-in page → Create account). The unique `visitor_id` makes replays no-ops, so the Owner Control Panel's "register-page visitors" metric reflects real, unique visitors. It feeds `GET /admin/stats/visitors` and the Overview's Unique users & visitors summary, letting the owner compare registration *interest* (register-page visitors) against *conversion* (accounts in `users`). Written best-effort via `POST /stats/register-visit`; a tracking failure never blocks the sign-in page.
+
 ### crawl_jobs
 | Field | Type | Notes |
 | --- | --- | --- |

@@ -11,6 +11,76 @@ import (
 	"intellisearch/internal/repositories"
 )
 
+func TestVisitorStatsBucketsUsersAndVisitors(t *testing.T) {
+	db := newTestDB(t)
+	now := time.Now().UTC()
+	users := repositories.NewUserRepository(db)
+	anonymous := repositories.NewAnonymousUsageRepository(db)
+	registerVisit := repositories.NewRegisterVisitRepository(db)
+
+	// Two registered accounts today, one yesterday.
+	for i, when := range []time.Time{now, now.Add(time.Minute), now.AddDate(0, 0, -1)} {
+		if err := users.Create(&entities.User{ID: uuid.New(), Name: "N", Email: "u" + string(rune('a'+i)) + "@example.com", PasswordHash: "x", Role: entities.RoleGeneralUser, Status: entities.StatusActive, AIDailyQuota: 3, CreatedAt: when}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// One anonymous AI visitor today.
+	if _, err := anonymous.Claim(uuid.New(), "ip1"); err != nil {
+		t.Fatal(err)
+	}
+	// Register-page visitors: visitorA replays the page (must be deduped),
+	// visitorB is a different device today, and one row was created last week.
+	visitorA := uuid.New()
+	visitorB := uuid.New()
+	if _, _, err := registerVisit.Claim(visitorA, "ip2"); err != nil {
+		t.Fatal(err)
+	}
+	if _, created, err := registerVisit.Claim(visitorA, "ip2"); err != nil || created {
+		t.Fatalf("replay should be a no-op (created=%v err=%v)", created, err)
+	}
+	if _, _, err := registerVisit.Claim(visitorB, "ip3"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&entities.RegisterVisit{VisitorID: uuid.New(), IPHash: "ip4", CreatedAt: now.AddDate(0, 0, -7), UpdatedAt: now.AddDate(0, 0, -7)}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	stats := NewStatsService(repositories.NewUsageLogRepository(db), users, repositories.NewProviderRepository(db), nil, anonymous, registerVisit)
+	result, err := stats.VisitorStats()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.RegisteredUsers.Total != 3 || result.AnonymousVisitors.Total != 1 || result.RegisterPageVisits.Total != 3 {
+		t.Fatalf("unexpected totals: registered=%d anonymous=%d registerVisits=%d", result.RegisteredUsers.Total, result.AnonymousVisitors.Total, result.RegisterPageVisits.Total)
+	}
+	if len(result.RegisteredUsers.Daily) != 7 || len(result.RegisteredUsers.Weekly) != 8 {
+		t.Fatalf("expected 7 daily and 8 weekly registered points, got %d/%d", len(result.RegisteredUsers.Daily), len(result.RegisteredUsers.Weekly))
+	}
+	// Today's daily bucket (index 6): 2 registered, 1 anonymous, 2 register
+	// visits (the replay must not inflate). This week's weekly bucket matches.
+	today := result.RegisteredUsers.Daily[6]
+	if today.Label != now.Format("2006-01-02") || today.Count != 2 {
+		t.Fatalf("today's registered bucket should be 2 on %s, got %d", now.Format("2006-01-02"), today.Count)
+	}
+	if result.AnonymousVisitors.Daily[6].Count != 1 {
+		t.Fatalf("today's anonymous bucket should be 1, got %d", result.AnonymousVisitors.Daily[6].Count)
+	}
+	if result.RegisterPageVisits.Daily[6].Count != 2 {
+		t.Fatalf("today's register-visit bucket should be 2 (replay deduped), got %d", result.RegisterPageVisits.Daily[6].Count)
+	}
+	if result.RegisteredUsers.Weekly[7].Count != 3 || result.RegisterPageVisits.Weekly[7].Count != 2 {
+		t.Fatalf("this week's buckets wrong: registered=%d registerVisits=%d", result.RegisteredUsers.Weekly[7].Count, result.RegisterPageVisits.Weekly[7].Count)
+	}
+	// The same totals are surfaced on the overview stats.
+	overview, err := stats.UserStats()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if overview.RegisteredUsers != 3 || overview.AnonymousVisitors != 1 || overview.RegisterPageVisitors != 3 {
+		t.Fatalf("overview visitor totals wrong: %+v", overview)
+	}
+}
+
 func TestMaskQuery(t *testing.T) {
 	cases := []struct {
 		in   string
@@ -39,7 +109,7 @@ func TestUserStatsMasksTopQueries(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	stats := NewStatsService(usage, repositories.NewUserRepository(db), repositories.NewProviderRepository(db), nil)
+	stats := NewStatsService(usage, repositories.NewUserRepository(db), repositories.NewProviderRepository(db), nil, nil, nil)
 	result, err := stats.UserStats()
 	if err != nil {
 		t.Fatal(err)
@@ -78,7 +148,7 @@ func TestTrendingWordsAggregatesTermsPerBucket(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	stats := NewStatsService(usage, repositories.NewUserRepository(db), repositories.NewProviderRepository(db), nil)
+	stats := NewStatsService(usage, repositories.NewUserRepository(db), repositories.NewProviderRepository(db), nil, nil, nil)
 	result, err := stats.TrendingWords("daily")
 	if err != nil {
 		t.Fatal(err)
@@ -120,7 +190,7 @@ func TestTrendingWordsWeeklyWindow(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	stats := NewStatsService(usage, repositories.NewUserRepository(db), repositories.NewProviderRepository(db), nil)
+	stats := NewStatsService(usage, repositories.NewUserRepository(db), repositories.NewProviderRepository(db), nil, nil, nil)
 	result, err := stats.TrendingWords("weekly")
 	if err != nil {
 		t.Fatal(err)

@@ -17,7 +17,6 @@ const trends = ref<Trends | null>(null)
 const aiStats = ref<AIStats | null>(null)
 const words = ref<TrendingWords | null>(null)
 const loading = ref(true)
-const maxTop = (s: UserStats | null) => Math.max(1, ...(s?.topQueries.map((q) => q.count) || [1]))
 const maxUser = (s: UserStats | null) => Math.max(1, ...(s?.perUserUsage.map((u) => u.count) || [1]))
 const maxWord = (w: TrendingWords | null) => Math.max(1, ...(w?.overall.map((t) => t.count) || [1]))
 
@@ -94,15 +93,13 @@ const alerts = computed(() => {
       </section>
 
       <section class="admin-card">
-        <div class="mini-head"><h2>Top queries</h2><router-link class="admin-site-link" to="/admin/stats/top">View all</router-link></div>
-        <ul v-if="stats.topQueries.length" class="rank-list">
-          <li v-for="q in stats.topQueries.slice(0, 5)" :key="q.query">
-            <span class="rank-bar" :style="{ width: `${(q.count / maxTop(stats)) * 100}%` }"></span>
-            <span class="rank-query">{{ q.query }}</span><span class="rank-count">{{ q.count }}</span>
-          </li>
-        </ul>
-        <EmptyState v-else title="No queries yet" message="Questions will appear here as users ask." />
-        <p class="privacy-note">Queries are masked to protect users — see <router-link class="admin-site-link" to="/admin/stats/words">trending words</router-link> for search-term insights.</p>
+        <div class="mini-head"><h2>Unique users & visitors</h2><router-link class="admin-site-link" to="/admin/stats/visitors">View details</router-link></div>
+        <div class="visitor-summary">
+          <div class="visitor-metric"><span>Registered accounts</span><strong>{{ stats.registeredUsers }}</strong></div>
+          <div class="visitor-metric"><span>Anonymous AI visitors</span><strong>{{ stats.anonymousVisitors }}</strong></div>
+          <div class="visitor-metric"><span>Register-page visitors</span><strong>{{ stats.registerPageVisitors }}</strong></div>
+        </div>
+        <p class="privacy-note">Comparing register-page visitors with registered accounts shows registration interest vs. conversion. Each visitor is counted once — replays of the register page are deduped.</p>
       </section>
       <section class="admin-card">
         <div class="mini-head"><h2>Most searched words</h2><router-link class="admin-site-link" to="/admin/stats/words">View trends</router-link></div>
@@ -130,5 +127,10 @@ const alerts = computed(() => {
 
 <style scoped>
 .admin-alerts { display: grid; gap: 10px; margin-bottom: 18px; }
+.visitor-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.visitor-metric { display: grid; gap: 4px; padding: 14px 16px; border: 1px solid var(--color-border); border-radius: 12px; background: color-mix(in srgb, var(--color-bg) 45%, transparent); }
+.visitor-metric span { color: var(--color-muted); font-size: .72rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.visitor-metric strong { font-size: 1.5rem; letter-spacing: -.03em; }
 .privacy-note { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--color-border); color: var(--color-muted); font-size: .76rem; line-height: 1.5; }
+@media (max-width: 640px) { .visitor-summary { grid-template-columns: 1fr; } }
 </style>

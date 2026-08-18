@@ -1,8 +1,10 @@
 package repositories
 
 import (
-	"intellisearch/internal/models/entities"
 	"errors"
+	"time"
+
+	"intellisearch/internal/models/entities"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -29,6 +31,27 @@ func (r *UserRepository) Create(user *entities.User) error { return r.db.Create(
 // Delete removes a user by id.
 func (r *UserRepository) Delete(id uuid.UUID) error {
 	return r.db.Delete(&entities.User{}, "id = ?", id).Error
+}
+
+// Count returns the total number of registered accounts.
+func (r *UserRepository) Count() (int64, error) {
+	var total int64
+	err := r.db.Model(&entities.User{}).Count(&total).Error
+	return total, err
+}
+
+// CreatedSince returns the creation times of all accounts created at or after
+// a cutoff (used to bucket new-registration daily/weekly trends).
+func (r *UserRepository) CreatedSince(start time.Time) ([]time.Time, error) {
+	var users []entities.User
+	if err := r.db.Where("created_at >= ?", start).Order("created_at asc").Find(&users).Error; err != nil {
+		return nil, err
+	}
+	times := make([]time.Time, 0, len(users))
+	for _, user := range users {
+		times = append(times, user.CreatedAt)
+	}
+	return times, nil
 }
 
 // List returns a searchable, paginated page of users ordered by creation date.

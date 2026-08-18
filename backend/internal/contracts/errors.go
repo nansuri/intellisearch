@@ -135,3 +135,9 @@ const TRAN01002 = "TRAN01002"
 
 // TRAN01003 indicates the translation rate limit was exceeded.
 const TRAN01003 = "TRAN01003"
+
+// STTS01001 indicates that visitor statistics could not be computed.
+const STTS01001 = "STTS01001"
+
+// STTS01002 indicates that a register-page visit could not be recorded.
+const STTS01002 = "STTS01002"

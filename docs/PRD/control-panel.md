@@ -54,7 +54,7 @@ Rules:
 
 - **User statistics:**
   - Usage over time: questions per day/week, active users.
-  - Top queries (most asked questions).
+  - Unique user / visitor summary: registered accounts, active users, anonymous AI visitors, and unique register-page visitors (each with daily/weekly trends) — so the owner can compare registration interest against conversion.
   - Per-user usage (who asks the most, who fails the most).
 - **AI statistics (detailed):**
   - **Success / failure rate** — overall and broken down by provider and model.

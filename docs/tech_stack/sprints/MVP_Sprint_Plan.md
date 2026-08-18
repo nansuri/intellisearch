@@ -103,7 +103,7 @@ Current delivery is incremental; see [`docs/tech_stack/IMPLEMENTATION_STATUS.md`
 
 **Tasks**
 - [x] Auth: control-panel login/logout, JWT sessions, expired-session handling, role middleware (Super Owner only)
-- [x] Sidebar navigation: parent → child accordion (desktop) + hamburger-triggered slide-in drawer with backdrop below 1024 px; deep-linkable child routes (e.g., `/admin/users/suspended`, `/admin/stats/top`); active child highlighted, active parent auto-expanded
+- [x] Sidebar navigation: parent → child accordion (desktop) + hamburger-triggered slide-in drawer with backdrop below 1024 px; deep-linkable child routes (e.g., `/admin/users/suspended`, `/admin/stats/visitors`); active child highlighted, active parent auto-expanded
 - [x] Reusable modals: `BaseModal` + `ConfirmModal` (create/edit forms and destructive confirmation), shared by users and providers; reusable `FormField`, `PageHeader`, `StatusBadge`, `PaginationBar`, `StatCard`, `Avatar`, `EmptyState`, `LoadingSpinner`, `TrendChart`
 - [x] User management: full CRUD — add/edit/delete users via modals, searchable + paginated list, suspend/reinstate with confirmation required
 - [x] Statistics (read-only): questions per day/week, active users, top queries, per-user usage, daily/weekly trend charts

@@ -43,7 +43,7 @@ func adminTestMux(t *testing.T) (*httptest.Server, *gorm.DB) {
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&entities.User{}, &entities.SiteSettings{}, &entities.AIQueueConfig{}, &entities.AIProvider{}, &entities.ChatSession{}, &entities.Message{}, &entities.SearchResult{}, &entities.ImageResult{}, &entities.UsageLog{}, &entities.CrawlJob{}, &entities.SearchHistory{}, &entities.AnonymousUsage{}, &entities.Note{}, &entities.MapPoint{}); err != nil {
+	if err := db.AutoMigrate(&entities.User{}, &entities.SiteSettings{}, &entities.AIQueueConfig{}, &entities.AIProvider{}, &entities.ChatSession{}, &entities.Message{}, &entities.SearchResult{}, &entities.ImageResult{}, &entities.UsageLog{}, &entities.CrawlJob{}, &entities.SearchHistory{}, &entities.AnonymousUsage{}, &entities.Note{}, &entities.MapPoint{}, &entities.RegisterVisit{}); err != nil {
 		t.Fatal(err)
 	}
 	seed := func(user *entities.User, password string) {
@@ -70,14 +70,15 @@ func adminTestMux(t *testing.T) (*httptest.Server, *gorm.DB) {
 	userService := services.NewUserService(repositories.NewUserRepository(db), repositories.NewUsageLogRepository(db), t.TempDir())
 	historyService := services.NewSearchHistoryService(repositories.NewSearchHistoryRepository(db), repositories.NewMessageRepository(db), services.NewLLMService(repositories.NewProviderRepository(db), cfg.JWTSecret), repositories.NewQueueConfigRepository(db))
 	adminService := services.NewAdminService(repositories.NewProviderRepository(db), repositories.NewQueueConfigRepository(db), repositories.NewSiteRepository(db), cfg.JWTSecret, t.TempDir())
-	statsService := services.NewStatsService(repositories.NewUsageLogRepository(db), repositories.NewUserRepository(db), repositories.NewProviderRepository(db), nil)
+	statsService := services.NewStatsService(repositories.NewUsageLogRepository(db), repositories.NewUserRepository(db), repositories.NewProviderRepository(db), nil, repositories.NewAnonymousUsageRepository(db), repositories.NewRegisterVisitRepository(db))
 	aiHandler := handlers.NewAIHandler(fakeRunner{}, repositories.NewQueueConfigRepository(db), repositories.NewUserRepository(db), repositories.NewUsageLogRepository(db), repositories.NewAnonymousUsageRepository(db), allowingLimiter{}, authService)
 	t.Cleanup(aiHandler.Stop)
 	adminHandler := handlers.NewAdminHandler(userService, adminService, statsService, services.NewOllamaService())
 	appsHandler := handlers.NewAppsHandler(services.NewNoteService(repositories.NewNoteRepository(db)), services.NewTranslateService(""), allowingLimiter{})
 	pollinationsHandler := handlers.NewPollinationsHandler(adminService, services.NewPollinationsService("https://media.pollinations.ai"))
 	siteService := services.NewSiteService(repositories.NewSiteRepository(db))
-	mux := New("*", t.TempDir(), siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService, historyService), nil, aiHandler, adminHandler, appsHandler, pollinationsHandler, authService)
+	visitorHandler := handlers.NewVisitorHandler(repositories.NewRegisterVisitRepository(db))
+	mux := New("*", t.TempDir(), siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService, historyService), nil, aiHandler, adminHandler, appsHandler, pollinationsHandler, visitorHandler, authService)
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 	return server, db
@@ -123,6 +124,82 @@ func call(t *testing.T, server *httptest.Server, method, path, token string, bod
 	defer response.Body.Close()
 	payload, _ := io.ReadAll(response.Body)
 	return response.StatusCode, payload
+}
+
+func TestRegisterVisitTrackingEndToEnd(t *testing.T) {
+	server, _ := adminTestMux(t)
+
+	// Public tracking: an anonymous POST (no identity) records a new visit.
+	status, payload := call(t, server, http.MethodPost, "/api/v1/stats/register-visit", "", nil)
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"new":true`)) {
+		t.Fatalf("expected the first register visit to be recorded as new: %d %s", status, payload)
+	}
+
+	// A token-identified visitor is counted once: the first call is new, the
+	// replay (same X-Visitor-ID) must be a no-op.
+	visitor := uuid.NewString()
+	visit := func() (int, []byte) {
+		request, err := http.NewRequest(http.MethodPost, server.URL+"/api/v1/stats/register-visit", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("X-Visitor-ID", visitor)
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		body, _ := io.ReadAll(response.Body)
+		return response.StatusCode, body
+	}
+	status, payload = visit()
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"new":true`)) {
+		t.Fatalf("new token should record a new visit: %d %s", status, payload)
+	}
+	status, payload = visit()
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"new":false`)) {
+		t.Fatalf("replay must not count as a new visit: %d %s", status, payload)
+	}
+
+	// The super owner sees the unique-visitor summary (two register-page
+	// visitors: the cookie-less one and the header-token one).
+	ownerToken := loginToken(t, server, "owner@example.com", "owner-pass")
+	status, payload = call(t, server, http.MethodGet, "/api/v1/admin/stats/visitors", ownerToken, nil)
+	if status != http.StatusOK {
+		t.Fatalf("visitors endpoint failed: %d %s", status, payload)
+	}
+	var summary struct {
+		Data struct {
+			RegisteredUsers    struct{ Total int64 `json:"total"` } `json:"registeredUsers"`
+			AnonymousVisitors  struct{ Total int64 `json:"total"` } `json:"anonymousVisitors"`
+			RegisterPageVisits struct {
+				Total int64 `json:"total"`
+				Daily []struct {
+					Count int64 `json:"count"`
+				} `json:"daily"`
+			} `json:"registerPageVisits"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(payload, &summary); err != nil {
+		t.Fatal(err)
+	}
+	if summary.Data.RegisterPageVisits.Total != 2 || len(summary.Data.RegisterPageVisits.Daily) != 7 {
+		t.Fatalf("expected 2 unique register-page visitors and 7 daily points, got total=%d days=%d (%s)", summary.Data.RegisterPageVisits.Total, len(summary.Data.RegisterPageVisits.Daily), payload)
+	}
+	if summary.Data.RegisterPageVisits.Daily[6].Count != 2 {
+		t.Fatalf("today's register-visit bucket should count both visitors, got %d", summary.Data.RegisterPageVisits.Daily[6].Count)
+	}
+	// The seeded super owner + jane count as registered users.
+	if summary.Data.RegisteredUsers.Total != 2 {
+		t.Fatalf("expected exactly the two seeded accounts as registered users, got %d", summary.Data.RegisteredUsers.Total)
+	}
+
+	// General users are forbidden from the visitor summary.
+	janeToken := loginToken(t, server, "jane@example.com", "jane-pass")
+	status, _ = call(t, server, http.MethodGet, "/api/v1/admin/stats/visitors", janeToken, nil)
+	if status != http.StatusForbidden {
+		t.Fatalf("expected 403 for general user, got %d", status)
+	}
 }
 
 func TestAdminRequiresSuperOwner(t *testing.T) {

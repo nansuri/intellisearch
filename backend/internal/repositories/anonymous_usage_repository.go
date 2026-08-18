@@ -54,3 +54,25 @@ func (r *AnonymousUsageRepository) Claim(visitorID uuid.UUID, ipHash string) (en
 	err := r.db.Where("visitor_id = ? OR ip_hash = ?", visitorID, ipHash).First(&winner).Error
 	return winner, err
 }
+
+// Count returns the total number of unique anonymous visitors that have used
+// the AI service.
+func (r *AnonymousUsageRepository) Count() (int64, error) {
+	var total int64
+	err := r.db.Model(&entities.AnonymousUsage{}).Count(&total).Error
+	return total, err
+}
+
+// CreatedSince returns the creation times of anonymous-usage claims since a
+// cutoff (used to bucket daily/weekly visitor trends in the service layer).
+func (r *AnonymousUsageRepository) CreatedSince(start time.Time) ([]time.Time, error) {
+	var rows []entities.AnonymousUsage
+	if err := r.db.Where("created_at >= ?", start).Order("created_at asc").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	times := make([]time.Time, 0, len(rows))
+	for _, row := range rows {
+		times = append(times, row.CreatedAt)
+	}
+	return times, nil
+}

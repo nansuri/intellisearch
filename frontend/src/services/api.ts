@@ -33,6 +33,7 @@ export const FRIENDLY_ERRORS: Record<string, string> = {
   ADMN07001: "Couldn't reach the Pollinations account API — try again in a moment.",
   ADMN07002: 'That Pollinations API key was rejected — check it\'s valid and has account access.',
   ADMN07003: 'The image could not be uploaded to Pollinations.',
+  STTS01001: 'Visitor statistics could not be loaded.',
 }
 
 export class ApiError extends Error {
@@ -124,17 +125,29 @@ export type PollinationsUploadResult = { id: string; url: string; contentType: s
 export type PollinationsCredentialsInput = { providerId?: string; apiKey?: string; baseUrl?: string }
 export type TopQuery = { query: string; count: number }
 export type PerUserUsage = { userId: string; name: string; email: string; count: number }
-export type UserStats = { questionsToday: number; questionsWeek: number; activeUsersWeek: number; failed: number; topQueries: TopQuery[]; perUserUsage: PerUserUsage[] }
+export type UserStats = { questionsToday: number; questionsWeek: number; activeUsersWeek: number; failed: number; registeredUsers: number; anonymousVisitors: number; registerPageVisitors: number; topQueries: TopQuery[]; perUserUsage: PerUserUsage[] }
 export type ErrorGroup = { errorCode: string; errorMessage: string; count: number; lastSeen: string }
 export type AIStats = { totalCompleted: number; totalFailed: number; successRate: number; errors: ErrorGroup[]; latency: { averageMs: number; p50: number; p95: number; p99: number }; providers: { providerId: string | null; name: string; model: string; successes: number; total: number; rate: number }[]; queue: { queueDepth: number; inFlight: number; rejected: number; maxConcurrent: number } }
 export type TrendPoint = { label: string; count: number }
 export type Trends = { daily: TrendPoint[]; weekly: TrendPoint[] }
+export type VisitorMetric = { total: number; daily: TrendPoint[]; weekly: TrendPoint[] }
+export type VisitorStats = {
+  registeredUsers: VisitorMetric
+  activeUsers: number
+  activeUsers7d: number
+  anonymousVisitors: VisitorMetric
+  registerPageVisits: VisitorMetric
+}
 export type WordCount = { word: string; count: number }
 export type WordTrendBucket = { label: string; top: WordCount[] }
 export type TrendingWords = { window: 'daily' | 'weekly'; buckets: WordTrendBucket[]; overall: WordCount[] }
 
 // Public & ask
 export const getSite = () => request<SiteSettings>('/site')
+// Best-effort, idempotent: records that an anonymous visitor opened the
+// register page so the control panel can measure registration interest. Carries
+// the same visitor identity as anonymous AI asks (deduped server-side).
+export const trackRegisterVisit = () => request<{ recorded: boolean; new: boolean }>('/stats/register-visit', { method: 'POST', headers: visitorHeaders() })
 export const ask = async (query: string, sessionId?: string, location?: GeoLocation, mode: AskMode = 'enhanced') => {
   const body: { query: string; sessionId?: string; location?: GeoLocation; mode?: AskMode } = { query, mode }
   if (sessionId) body.sessionId = sessionId
@@ -183,6 +196,7 @@ export const deleteUser = (id: string) => request<{ deleted: boolean }>(`/admin/
 export const getUserStats = () => request<UserStats>('/admin/stats')
 export const getTrends = () => request<Trends>('/admin/stats/trends')
 export const getTrendingWords = (window: 'daily' | 'weekly' = 'daily') => request<TrendingWords>(`/admin/stats/trending-words?window=${window}`)
+export const getVisitorStats = () => request<VisitorStats>('/admin/stats/visitors')
 export const getAIStats = (type = '') => request<AIStats>(`/admin/stats/ai${type ? `?type=${encodeURIComponent(type)}` : ''}`)
 
 // Admin — AI providers & queue

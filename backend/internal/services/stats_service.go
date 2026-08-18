@@ -37,12 +37,15 @@ type PerUserUsage struct {
 }
 
 type UserStats struct {
-	QuestionsToday  int64           `json:"questionsToday"`
-	QuestionsWeek   int64           `json:"questionsWeek"`
-	ActiveUsersWeek int64           `json:"activeUsersWeek"`
-	FailedSince     int64           `json:"failed"`
-	TopQueries      []TopQuery      `json:"topQueries"`
-	PerUserUsage    []PerUserUsage  `json:"perUserUsage"`
+	QuestionsToday       int64          `json:"questionsToday"`
+	QuestionsWeek        int64          `json:"questionsWeek"`
+	ActiveUsersWeek      int64          `json:"activeUsersWeek"`
+	FailedSince          int64          `json:"failed"`
+	RegisteredUsers      int64          `json:"registeredUsers"`
+	AnonymousVisitors    int64          `json:"anonymousVisitors"`
+	RegisterPageVisitors int64          `json:"registerPageVisitors"`
+	TopQueries           []TopQuery     `json:"topQueries"`
+	PerUserUsage         []PerUserUsage `json:"perUserUsage"`
 }
 
 type ProviderPerformance struct {
@@ -112,14 +115,16 @@ type TrendingWords struct {
 }
 
 type StatsService struct {
-	usage     *repositories.UsageLogRepository
-	users     *repositories.UserRepository
-	providers *repositories.ProviderRepository
-	queue     QueueMetricsProvider
+	usage         *repositories.UsageLogRepository
+	users         *repositories.UserRepository
+	providers     *repositories.ProviderRepository
+	queue         QueueMetricsProvider
+	anonymous     *repositories.AnonymousUsageRepository
+	registerVisit *repositories.RegisterVisitRepository
 }
 
-func NewStatsService(usage *repositories.UsageLogRepository, users *repositories.UserRepository, providers *repositories.ProviderRepository, queue QueueMetricsProvider) *StatsService {
-	return &StatsService{usage: usage, users: users, providers: providers, queue: queue}
+func NewStatsService(usage *repositories.UsageLogRepository, users *repositories.UserRepository, providers *repositories.ProviderRepository, queue QueueMetricsProvider, anonymous *repositories.AnonymousUsageRepository, registerVisit *repositories.RegisterVisitRepository) *StatsService {
+	return &StatsService{usage: usage, users: users, providers: providers, queue: queue, anonymous: anonymous, registerVisit: registerVisit}
 }
 
 // UserStats aggregates usage over the current UTC day and the trailing 7 days.
@@ -141,6 +146,18 @@ func (s *StatsService) UserStats() (UserStats, error) {
 		return UserStats{}, err
 	}
 	failed, err := s.usage.CountFailedSince(today)
+	if err != nil {
+		return UserStats{}, err
+	}
+	registeredUsers, err := s.userCount()
+	if err != nil {
+		return UserStats{}, err
+	}
+	anonymousVisitors, err := s.anonymousCount()
+	if err != nil {
+		return UserStats{}, err
+	}
+	registerPageVisitors, err := s.registerVisitCount()
 	if err != nil {
 		return UserStats{}, err
 	}
@@ -167,13 +184,139 @@ func (s *StatsService) UserStats() (UserStats, error) {
 		perUserUsage = append(perUserUsage, PerUserUsage{UserID: row.UserID.String(), Name: user.Name, Email: user.Email, Count: row.Count})
 	}
 	return UserStats{
-		QuestionsToday:  questionsToday,
-		QuestionsWeek:   questionsWeek,
-		ActiveUsersWeek: activeWeek,
-		FailedSince:     failed,
-		TopQueries:      topQueries,
-		PerUserUsage:    perUserUsage,
+		QuestionsToday:       questionsToday,
+		QuestionsWeek:        questionsWeek,
+		ActiveUsersWeek:      activeWeek,
+		FailedSince:          failed,
+		RegisteredUsers:      registeredUsers,
+		AnonymousVisitors:    anonymousVisitors,
+		RegisterPageVisitors: registerPageVisitors,
+		TopQueries:           topQueries,
+		PerUserUsage:         perUserUsage,
 	}, nil
+}
+
+// userCount returns the total registered accounts; nil-safe for tests that
+// construct the service without a user repository.
+func (s *StatsService) userCount() (int64, error) {
+	if s.users == nil {
+		return 0, nil
+	}
+	return s.users.Count()
+}
+
+// anonymousCount returns the total unique anonymous AI visitors; nil-safe.
+func (s *StatsService) anonymousCount() (int64, error) {
+	if s.anonymous == nil {
+		return 0, nil
+	}
+	return s.anonymous.Count()
+}
+
+// registerVisitCount returns the total unique register-page visitors; nil-safe.
+func (s *StatsService) registerVisitCount() (int64, error) {
+	if s.registerVisit == nil {
+		return 0, nil
+	}
+	return s.registerVisit.Count()
+}
+
+// VisitorMetric is one visitor dimension: an all-time total plus the trailing
+// 7-day/8-week trend so the Unique visitors page can chart activity.
+type VisitorMetric struct {
+	Total  int64        `json:"total"`
+	Daily  []TrendPoint `json:"daily"`
+	Weekly []TrendPoint `json:"weekly"`
+}
+
+// VisitorStats is the "Unique user / visitor" control-panel summary: how many
+// accounts exist, how many are actually using the AI service, how many unique
+// anonymous visitors used it, and how many unique visitors opened the register
+// page — each with daily/weekly trends for the charts.
+type VisitorStats struct {
+	RegisteredUsers    VisitorMetric `json:"registeredUsers"`
+	ActiveUsers        int64         `json:"activeUsers"`
+	ActiveUsers7d      int64         `json:"activeUsers7d"`
+	AnonymousVisitors  VisitorMetric `json:"anonymousVisitors"`
+	RegisterPageVisits VisitorMetric `json:"registerPageVisits"`
+}
+
+// VisitorStats aggregates registered, active, anonymous, and register-page
+// visitor numbers over the same trailing window used by the Trends charts.
+func (s *StatsService) VisitorStats() (VisitorStats, error) {
+	now := time.Now().UTC()
+	start := now.AddDate(0, 0, -7*8)
+
+	registeredTimes, err := s.userTimes(start)
+	if err != nil {
+		return VisitorStats{}, err
+	}
+	anonymousTimes, err := s.anonymousTimes(start)
+	if err != nil {
+		return VisitorStats{}, err
+	}
+	visitTimes, err := s.registerVisitTimes(start)
+	if err != nil {
+		return VisitorStats{}, err
+	}
+	registeredTotal, err := s.userCount()
+	if err != nil {
+		return VisitorStats{}, err
+	}
+	anonymousTotal, err := s.anonymousCount()
+	if err != nil {
+		return VisitorStats{}, err
+	}
+	visitTotal, err := s.registerVisitCount()
+	if err != nil {
+		return VisitorStats{}, err
+	}
+	activeTotal, err := s.usage.ActiveUsersSince(time.Time{})
+	if err != nil {
+		return VisitorStats{}, err
+	}
+	active7d, err := s.usage.ActiveUsersSince(now.AddDate(0, 0, -7))
+	if err != nil {
+		return VisitorStats{}, err
+	}
+
+	return VisitorStats{
+		RegisteredUsers:    visitorMetric(registeredTotal, registeredTimes, now),
+		ActiveUsers:        activeTotal,
+		ActiveUsers7d:      active7d,
+		AnonymousVisitors:  visitorMetric(anonymousTotal, anonymousTimes, now),
+		RegisterPageVisits: visitorMetric(visitTotal, visitTimes, now),
+	}, nil
+}
+
+// visitorMetric combines a total with its bucketed daily/weekly trend.
+func visitorMetric(total int64, times []time.Time, now time.Time) VisitorMetric {
+	daily, weekly := bucketTrends(times, now)
+	return VisitorMetric{Total: total, Daily: daily, Weekly: weekly}
+}
+
+// userTimes returns new-account created_at timestamps since start (nil-safe).
+func (s *StatsService) userTimes(start time.Time) ([]time.Time, error) {
+	if s.users == nil {
+		return nil, nil
+	}
+	return s.users.CreatedSince(start)
+}
+
+// anonymousTimes returns anonymous-usage claim times since start (nil-safe).
+func (s *StatsService) anonymousTimes(start time.Time) ([]time.Time, error) {
+	if s.anonymous == nil {
+		return nil, nil
+	}
+	return s.anonymous.CreatedSince(start)
+}
+
+// registerVisitTimes returns register-page visit times since start (nil-safe).
+func (s *StatsService) registerVisitTimes(start time.Time) ([]time.Time, error) {
+	if s.registerVisit == nil {
+		return nil, nil
+	}
+	return s.registerVisit.CreatedSince(start)
 }
 
 // AIStats reports success/failure, error groups, latency percentiles, per-provider
@@ -246,6 +389,14 @@ func (s *StatsService) Trends() (Trends, error) {
 	if err != nil {
 		return Trends{}, err
 	}
+	daily, weekly := bucketTrends(times, now)
+	return Trends{Daily: daily, Weekly: weekly}, nil
+}
+
+// bucketTrends buckets a set of creation times into the trailing 7 UTC days
+// and 8 Monday-based weeks. Shared by the question trends and the visitor
+// metrics so every chart in the control panel uses identical buckets.
+func bucketTrends(times []time.Time, now time.Time) ([]TrendPoint, []TrendPoint) {
 	daily := make([]TrendPoint, 0, 7)
 	weekly := make([]TrendPoint, 0, 8)
 	for day := 0; day < 7; day++ {
@@ -257,7 +408,7 @@ func (s *StatsService) Trends() (Trends, error) {
 		label := weekStart.Format("2006") + "-W" + fmt.Sprintf("%02d", weekNumber(weekStart))
 		weekly = append(weekly, TrendPoint{Label: label, Count: countWithin(times, weekStart, weekStart.AddDate(0, 0, 7))})
 	}
-	return Trends{Daily: daily, Weekly: weekly}, nil
+	return daily, weekly
 }
 
 func countWithin(times []time.Time, start, end time.Time) int64 {
