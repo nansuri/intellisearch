@@ -211,101 +211,115 @@ function submit() {
 }
 </script>
 <template>
-  <BaseModal :open="open" :title="provider ? 'Edit provider' : 'New provider'" @close="emit('close')">
-    <form class="admin-form" @submit.prevent="submit">
-      <FormField label="Name" :error="name ? '' : undefined">
-        <input v-model="name" class="text-input" required placeholder="Local Ollama" />
-      </FormField>
-      <FormField label="Provider type">
-        <select v-model="providerType" class="text-input" @change="onTypeChange">
-          <option v-for="(preset, type) in TYPE_PRESETS" :key="type" :value="type">{{ preset.label }}</option>
-        </select>
-      </FormField>
-      <FormField label="Base URL" :hint="selectedPreset.baseUrlHint" :error="baseUrl ? '' : undefined">
-        <input v-model="baseUrl" class="text-input" type="url" required :placeholder="selectedPreset.baseUrl" @change="onBaseUrlChange" />
-      </FormField>
-      <FormField label="Model" :hint="showModelSelect && !modelCustom ? `${modelSelectCount} models available` : undefined" :error="model ? '' : undefined">
-        <select v-if="showModelSelect && !modelCustom" v-model="model" class="text-input" required @change="onModelSelectChange">
-          <option v-for="m in modelOptions" :key="m" :value="m">{{ m }}</option>
-          <option :value="CUSTOM_MODEL">Type a custom model…</option>
-        </select>
-        <input v-else v-model="model" class="text-input" required :placeholder="modelPlaceholder" />
-      </FormField>
-      <FormField v-if="isOllama" label="Ollama server" hint="Models and health are fetched server-side through the API.">
-        <button type="button" class="base-button button-secondary ollama-load" :disabled="!baseUrl.trim() || ollamaStatus === 'loading'" @click="loadOllama">
-          {{ ollamaStatus === 'loading' ? 'Connecting…' : ollamaConnected ? 'Refresh' : 'Load models & health' }}
-        </button>
-      </FormField>
-      <div v-if="isOllama && ollamaConnected" class="ollama-status">
-        <div class="ollama-status-row">
-          <span class="ollama-dot" />
-          <span>Connected · Ollama {{ ollamaHealth?.version || 'unknown' }} · {{ ollamaModels.length }} model{{ ollamaModels.length === 1 ? '' : 's' }} available</span>
+  <BaseModal :open="open" :title="provider ? 'Edit provider' : 'New provider'" size="lg" @close="emit('close')">
+    <form class="admin-form provider-form" @submit.prevent="submit">
+      <div class="provider-section">
+        <div class="setting-title"><div><div class="section-label">Connection</div><h2>Endpoint</h2><p>Where requests are sent and which model answers.</p></div></div>
+        <div class="form-grid-2">
+          <FormField label="Name" :error="name ? '' : undefined">
+            <input v-model="name" class="text-input" required placeholder="Local Ollama" />
+          </FormField>
+          <FormField label="Provider type">
+            <select v-model="providerType" class="text-input" @change="onTypeChange">
+              <option v-for="(preset, type) in TYPE_PRESETS" :key="type" :value="type">{{ preset.label }}</option>
+            </select>
+          </FormField>
         </div>
-        <template v-if="ollamaHealth?.runningModels?.length">
-          <div class="ollama-running-title">Loaded in memory</div>
-          <div v-for="m in ollamaHealth.runningModels" :key="m.name" class="ollama-running">
-            <span class="ollama-running-name">{{ m.name }}</span>
-            <span v-if="m.cpu" class="ollama-running-stat">cpu {{ m.cpu }}</span>
-            <span v-if="m.gpu" class="ollama-running-stat">gpu {{ m.gpu }}</span>
-            <span v-if="m.memory" class="ollama-running-stat">{{ m.memory }}</span>
-          </div>
-        </template>
-        <p v-else class="ollama-note">No models loaded in memory right now.</p>
+        <FormField label="Base URL" :hint="selectedPreset.baseUrlHint" :error="baseUrl ? '' : undefined">
+          <input v-model="baseUrl" class="text-input" type="url" required :placeholder="selectedPreset.baseUrl" @change="onBaseUrlChange" />
+        </FormField>
+        <FormField label="Model" :hint="showModelSelect && !modelCustom ? `${modelSelectCount} models available` : undefined" :error="model ? '' : undefined">
+          <select v-if="showModelSelect && !modelCustom" v-model="model" class="text-input" required @change="onModelSelectChange">
+            <option v-for="m in modelOptions" :key="m" :value="m">{{ m }}</option>
+            <option :value="CUSTOM_MODEL">Type a custom model…</option>
+          </select>
+          <input v-else v-model="model" class="text-input" required :placeholder="modelPlaceholder" />
+        </FormField>
+        <FormField v-if="selectedPreset.needsKey" label="API key" hint="Stored encrypted; leave blank to keep the existing key">
+          <input v-model="apiKey" class="text-input" type="password" :placeholder="provider ? 'Keep current key' : (providerType === 'huggingface' ? 'hf_…' : 'pk_… / sk_…')" @change="onApiKeyChange" />
+        </FormField>
       </div>
-      <p v-else-if="isOllama && ollamaStatus === 'error'" class="ollama-error" role="alert">{{ ollamaError }}</p>
-      <FormField v-if="selectedPreset.needsKey" label="API key" hint="Stored encrypted; leave blank to keep the existing key">
-        <input v-model="apiKey" class="text-input" type="password" :placeholder="provider ? 'Keep current key' : (providerType === 'huggingface' ? 'hf_…' : 'pk_… / sk_…')" @change="onApiKeyChange" />
-      </FormField>
-      <FormField v-if="isPollinations" label="Pollinations account" hint="Credits, usage, and models are fetched server-side through the API.">
-        <button type="button" class="base-button button-secondary ollama-load" :disabled="!pollCanLoad || pollStatus === 'loading'" @click="loadPollinations">
-          {{ pollStatus === 'loading' ? 'Checking…' : pollConnected ? 'Refresh account & usage' : 'Load credits & usage' }}
-        </button>
-      </FormField>
-      <div v-if="isPollinations && pollConnected" class="ollama-status poll-status">
-        <div class="ollama-status-row">
-          <span class="ollama-dot" />
-          <span>Balance <strong>{{ pollAccount?.balance?.toLocaleString(undefined, { maximumFractionDigits: 2 }) }}</strong> pollen</span>
-        </div>
-        <template v-if="pollAccount?.key">
-          <div class="poll-key-row">
-            <span class="poll-key-type">{{ pollAccount.key.type }} key</span>
-            <span v-if="pollAccount.key.expiresAt" class="poll-key-meta">expires {{ new Date(pollAccount.key.expiresAt).toLocaleDateString() }}</span>
-            <span v-else class="poll-key-meta">never expires</span>
-            <span v-if="pollAccount.key.pollenBudget != null" class="poll-key-meta">key budget {{ pollAccount.key.pollenBudget }}</span>
-          </div>
-          <p v-if="pollAccount.key.permissions?.account?.length" class="ollama-note">account scopes: {{ pollAccount.key.permissions.account.join(', ') }}</p>
-          <p v-else-if="!pollAccount.key.valid" class="poll-key-invalid">This API key is not valid — check it on enter.pollinations.ai.</p>
-        </template>
-        <template v-if="pollAccount?.profile">
-          <div class="ollama-running-title">Account</div>
-          <div class="ollama-running">
-            <span class="ollama-running-name">{{ pollAccount.profile.githubUsername || 'Pollinations user' }}</span>
-            <span v-if="pollAccount.profile.name" class="ollama-running-stat">{{ pollAccount.profile.name }}</span>
-            <span v-if="pollAccount.profile.email" class="ollama-running-stat">{{ pollAccount.profile.email }}</span>
-          </div>
-        </template>
-        <template v-if="pollDaily.length">
-          <div class="ollama-running-title">Usage · last {{ pollDaily.length }} day{{ pollDaily.length === 1 ? '' : 's' }}</div>
-          <div class="ollama-running">
-            <span class="ollama-running-name">{{ pollUsageSummary.totalRequests }} requests</span>
-            <span class="ollama-running-stat">≈ ${{ pollUsageSummary.totalCost.toFixed(4) }}</span>
-          </div>
-          <div class="poll-daily-table">
-            <div v-for="row in pollDaily.slice(0, 7)" :key="row.date" class="poll-daily-row">
-              <span class="poll-daily-date">{{ row.date }}</span>
-              <span class="poll-daily-model">{{ row.model || '—' }}</span>
-              <span class="poll-daily-stat">{{ row.requests }} req</span>
-              <span class="poll-daily-stat">${{ row.cost_usd.toFixed(4) }}</span>
+
+      <div v-if="isOllama || isPollinations" class="provider-section">
+        <div class="setting-title"><div><div class="section-label">Server integration</div><h2>{{ isOllama ? 'Ollama server' : 'Pollinations account' }}</h2><p>Live introspection is proxied through the API — the browser never calls the provider directly.</p></div></div>
+        <div v-if="isOllama">
+          <button type="button" class="base-button button-secondary ollama-load" :disabled="!baseUrl.trim() || ollamaStatus === 'loading'" @click="loadOllama">
+            {{ ollamaStatus === 'loading' ? 'Connecting…' : ollamaConnected ? 'Refresh' : 'Load models & health' }}
+          </button>
+          <div v-if="ollamaConnected" class="ollama-status">
+            <div class="ollama-status-row">
+              <span class="ollama-dot" />
+              <span>Connected · Ollama {{ ollamaHealth?.version || 'unknown' }} · {{ ollamaModels.length }} model{{ ollamaModels.length === 1 ? '' : 's' }} available</span>
             </div>
+            <template v-if="ollamaHealth?.runningModels?.length">
+              <div class="ollama-running-title">Loaded in memory</div>
+              <div v-for="m in ollamaHealth.runningModels" :key="m.name" class="ollama-running">
+                <span class="ollama-running-name">{{ m.name }}</span>
+                <span v-if="m.cpu" class="ollama-running-stat">cpu {{ m.cpu }}</span>
+                <span v-if="m.gpu" class="ollama-running-stat">gpu {{ m.gpu }}</span>
+                <span v-if="m.memory" class="ollama-running-stat">{{ m.memory }}</span>
+              </div>
+            </template>
+            <p v-else class="ollama-note">No models loaded in memory right now.</p>
           </div>
-        </template>
-        <p v-else class="ollama-note">No usage in the last 14 days.</p>
+          <p v-else-if="ollamaStatus === 'error'" class="ollama-error" role="alert">{{ ollamaError }}</p>
+        </div>
+        <div v-else-if="isPollinations">
+          <button type="button" class="base-button button-secondary ollama-load" :disabled="!pollCanLoad || pollStatus === 'loading'" @click="loadPollinations">
+            {{ pollStatus === 'loading' ? 'Checking…' : pollConnected ? 'Refresh account & usage' : 'Load credits & usage' }}
+          </button>
+          <div v-if="pollConnected" class="ollama-status poll-status">
+            <div class="ollama-status-row">
+              <span class="ollama-dot" />
+              <span>Balance <strong>{{ pollAccount?.balance?.toLocaleString(undefined, { maximumFractionDigits: 2 }) }}</strong> pollen</span>
+            </div>
+            <template v-if="pollAccount?.key">
+              <div class="poll-key-row">
+                <span class="poll-key-type">{{ pollAccount.key.type }} key</span>
+                <span v-if="pollAccount.key.expiresAt" class="poll-key-meta">expires {{ new Date(pollAccount.key.expiresAt).toLocaleDateString() }}</span>
+                <span v-else class="poll-key-meta">never expires</span>
+                <span v-if="pollAccount.key.pollenBudget != null" class="poll-key-meta">key budget {{ pollAccount.key.pollenBudget }}</span>
+              </div>
+              <p v-if="pollAccount.key.permissions?.account?.length" class="ollama-note">account scopes: {{ pollAccount.key.permissions.account.join(', ') }}</p>
+              <p v-else-if="!pollAccount.key.valid" class="poll-key-invalid">This API key is not valid — check it on enter.pollinations.ai.</p>
+            </template>
+            <template v-if="pollAccount?.profile">
+              <div class="ollama-running-title">Account</div>
+              <div class="ollama-running">
+                <span class="ollama-running-name">{{ pollAccount.profile.githubUsername || 'Pollinations user' }}</span>
+                <span v-if="pollAccount.profile.name" class="ollama-running-stat">{{ pollAccount.profile.name }}</span>
+                <span v-if="pollAccount.profile.email" class="ollama-running-stat">{{ pollAccount.profile.email }}</span>
+              </div>
+            </template>
+            <template v-if="pollDaily.length">
+              <div class="ollama-running-title">Usage · last {{ pollDaily.length }} day{{ pollDaily.length === 1 ? '' : 's' }}</div>
+              <div class="ollama-running">
+                <span class="ollama-running-name">{{ pollUsageSummary.totalRequests }} requests</span>
+                <span class="ollama-running-stat">≈ ${{ pollUsageSummary.totalCost.toFixed(4) }}</span>
+              </div>
+              <div class="poll-daily-table">
+                <div v-for="row in pollDaily.slice(0, 7)" :key="row.date" class="poll-daily-row">
+                  <span class="poll-daily-date">{{ row.date }}</span>
+                  <span class="poll-daily-model">{{ row.model || '—' }}</span>
+                  <span class="poll-daily-stat">{{ row.requests }} req</span>
+                  <span class="poll-daily-stat">${{ row.cost_usd.toFixed(4) }}</span>
+                </div>
+              </div>
+            </template>
+            <p v-else class="ollama-note">No usage in the last 14 days.</p>
+          </div>
+          <p v-else-if="pollStatus === 'error'" class="ollama-error" role="alert">{{ pollError }}</p>
+        </div>
       </div>
-      <p v-else-if="isPollinations && pollStatus === 'error'" class="ollama-error" role="alert">{{ pollError }}</p>
-      <FormField label="Model parameters (JSON)" :error="parametersError">
-        <textarea v-model="parametersText" class="text-input text-area" rows="5" spellcheck="false" />
-      </FormField>
-      <label class="checkbox-row"><input v-model="isActive" type="checkbox" /><span>Active provider (routed to next request)</span></label>
+
+      <div class="provider-section">
+        <div class="setting-title"><div><div class="section-label">Behavior</div><h2>Model parameters</h2><p>JSON object merged into every request — temperature, max tokens, and so on.</p></div></div>
+        <FormField label="Model parameters (JSON)" :error="parametersError">
+          <textarea v-model="parametersText" class="text-input text-area" rows="5" spellcheck="false" />
+        </FormField>
+        <label class="checkbox-row"><input v-model="isActive" type="checkbox" /><span>Active provider (routed to next request)</span></label>
+      </div>
+
       <div class="modal-submit-row">
         <button type="button" class="base-button button-secondary" @click="emit('close')">Cancel</button>
         <button type="submit" class="base-button button-primary" :disabled="saving || !name || !baseUrl || !model">{{ saving ? 'Saving…' : provider ? 'Save changes' : 'Create provider' }}</button>
@@ -315,8 +329,14 @@ function submit() {
 </template>
 
 <style scoped>
+.provider-form { gap: 18px; }
+.provider-section { display: grid; gap: 14px; padding-bottom: 18px; border-bottom: 1px dashed var(--color-border); }
+.provider-section:last-of-type { padding-bottom: 0; border-bottom: 0; }
+.setting-title { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+.setting-title h2 { margin: 4px 0 0; font-size: 1rem; letter-spacing: -.02em; }
+.setting-title p { margin: 4px 0 0; color: var(--color-muted); font-size: .8rem; line-height: 1.5; }
 .ollama-load { min-height: 38px; }
-.ollama-status { display: grid; gap: 8px; margin-top: -6px; padding: 12px 14px; border: 1px solid color-mix(in srgb, #34d399 35%, var(--color-border)); border-radius: 12px; background: color-mix(in srgb, #34d399 7%, var(--color-surface)); font-size: .8rem; }
+.ollama-status { display: grid; gap: 8px; margin-top: 2px; padding: 12px 14px; border: 1px solid color-mix(in srgb, #34d399 35%, var(--color-border)); border-radius: 12px; background: color-mix(in srgb, #34d399 7%, var(--color-surface)); font-size: .8rem; }
 .ollama-status-row { display: flex; align-items: center; gap: 8px; font-weight: 650; }
 .ollama-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 3px color-mix(in srgb, #34d399 22%, transparent); }
 .ollama-running-title { margin-top: 4px; color: var(--color-muted); font-size: .68rem; font-weight: 720; letter-spacing: .07em; text-transform: uppercase; }
@@ -324,7 +344,7 @@ function submit() {
 .ollama-running-name { font-weight: 680; }
 .ollama-running-stat { color: var(--color-muted); font-size: .74rem; font-variant-numeric: tabular-nums; }
 .ollama-note { margin: 0; color: var(--color-muted); font-size: .76rem; }
-.ollama-error { margin: -6px 0 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--color-danger) 35%, var(--color-border)); border-radius: 10px; background: color-mix(in srgb, var(--color-danger) 8%, var(--color-surface)); color: var(--color-danger); font-size: .78rem; line-height: 1.5; }
+.ollama-error { margin: 2px 0 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--color-danger) 35%, var(--color-border)); border-radius: 10px; background: color-mix(in srgb, var(--color-danger) 8%, var(--color-surface)); color: var(--color-danger); font-size: .78rem; line-height: 1.5; }
 .poll-key-row { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-size: .78rem; }
 .poll-key-type { font-weight: 720; text-transform: uppercase; letter-spacing: .04em; }
 .poll-key-meta { color: var(--color-muted); font-size: .74rem; }
