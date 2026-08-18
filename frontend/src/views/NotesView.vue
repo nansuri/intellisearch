@@ -1,23 +1,33 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { createNote, deleteNote, listNotes, updateNote, type Note } from '../services/api'
+import { useRouter } from 'vue-router'
+import { createNote, deleteNote, listNotes, updateNote, type AskMode, type Note } from '../services/api'
 import { useToastStore } from '../stores/toast'
 import PageHeader from '../components/PageHeader.vue'
 import BaseModal from '../components/BaseModal.vue'
 import FormField from '../components/FormField.vue'
 import LoadingSpinner from '../components/LoadingSpinner.vue'
 import EmptyState from '../components/EmptyState.vue'
+import AppHeader from '../components/AppHeader.vue'
+import AskBox from '../components/AskBox.vue'
+import MarkdownView from '../components/MarkdownView.vue'
 import { relativeTime } from '../utils/format'
 
+const router = useRouter()
 const toast = useToastStore()
 const notes = ref<Note[]>([])
 const loading = ref(true)
 const saving = ref(false)
 const editorOpen = ref(false)
 const editing = ref<Note | null>(null)
+const previewing = ref<Note | null>(null)
 const title = ref('')
 const content = ref('')
 const confirmingId = ref<number | null>(null)
+
+function onAsk(question: string, mode: AskMode) {
+  router.push({ path: '/search', query: { q: question, mode } })
+}
 
 async function load() {
   loading.value = true
@@ -76,6 +86,12 @@ function snippet(text: string, max = 220) {
 
 <template>
   <main class="page-shell notes-page">
+    <AppHeader compact>
+      <template #center>
+        <AskBox variant="google" placeholder="Ask a question, explore an idea…" @submit="onAsk" />
+      </template>
+    </AppHeader>
+
     <div class="notes-head">
       <PageHeader eyebrow="Apps" title="Notes" description="Save summaries and ideas. Anything you save from a search is linked back to it.">
         <button type="button" class="base-button button-primary" @click="openNew">+ New note</button>
@@ -87,8 +103,9 @@ function snippet(text: string, max = 220) {
     <section v-else-if="notes.length" class="notes-grid">
       <article v-for="note in notes" :key="note.id" class="note-card">
         <div class="note-card-head">
-          <h2>{{ note.title }}</h2>
+          <button type="button" class="note-card-title" :title="`Preview: ${note.title}`" @click="previewing = note">{{ note.title }}</button>
           <div class="note-card-actions">
+            <button type="button" class="note-action" title="Preview" @click="previewing = note">Preview</button>
             <button type="button" class="note-action" title="Edit" @click="openEdit(note)">Edit</button>
             <button type="button" class="note-action note-action--danger" :class="{ 'note-action--confirm': confirmingId === note.id }" @click="remove(note)">
               {{ confirmingId === note.id ? 'Confirm?' : 'Delete' }}
@@ -106,6 +123,17 @@ function snippet(text: string, max = 220) {
     <EmptyState v-else icon="📝" title="No notes yet" message="Save a search summary, or write your own note — anything you add shows up here.">
       <button type="button" class="base-button button-primary" @click="openNew">Write your first note</button>
     </EmptyState>
+
+    <BaseModal :open="Boolean(previewing)" :title="previewing?.title || 'Note'" size="lg" @close="previewing = null">
+      <div class="note-preview-body">
+        <div v-if="previewing" class="note-preview-meta">
+          <span v-if="previewing.sourceQuery">From search: “{{ previewing.sourceQuery }}”</span>
+          <span>{{ relativeTime(previewing.createdAt) }}</span>
+        </div>
+        <MarkdownView v-if="previewing?.content" :content="previewing.content" />
+        <p v-else class="note-preview-empty">This note has no content.</p>
+      </div>
+    </BaseModal>
 
     <BaseModal :open="editorOpen" :title="editing ? 'Edit note' : 'New note'" :busy="saving" @close="editorOpen = false">
       <form class="notes-form" @submit.prevent="save">
@@ -127,7 +155,8 @@ function snippet(text: string, max = 220) {
 </template>
 
 <style scoped>
-.notes-page { padding-top: 8px; }
+.notes-page { padding-top: 0; }
+.notes-head { margin-top: 28px; }
 .notes-head :deep(.admin-page-head) { margin-bottom: 22px; }
 .notes-loading { display: grid; place-items: center; padding: 60px 0; }
 .notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
@@ -142,7 +171,19 @@ function snippet(text: string, max = 220) {
   box-shadow: 0 10px 30px var(--color-shadow);
 }
 .note-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.note-card-head h2 { margin: 0; font-size: 1.02rem; letter-spacing: -.02em; }
+.note-card-title {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 1.02rem;
+  font-weight: 720;
+  letter-spacing: -.02em;
+  text-align: left;
+  cursor: pointer;
+}
+.note-card-title:hover { color: var(--color-primary); text-decoration: underline; }
 .note-card-actions { display: flex; gap: 4px; flex: 0 0 auto; }
 .note-action {
   padding: 4px 8px;
@@ -180,6 +221,22 @@ function snippet(text: string, max = 220) {
 .note-source { color: var(--color-primary); font-weight: 620; }
 .notes-form { display: grid; gap: 14px; }
 .notes-textarea { min-height: 180px; resize: vertical; line-height: 1.6; }
+.note-preview-body { display: grid; gap: 12px; min-width: 0; }
+.note-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: .76rem;
+}
+.note-preview-meta span:first-child { color: var(--color-primary); font-weight: 620; }
+.note-preview-empty { margin: 0; color: var(--color-muted); font-size: .9rem; }
+/* Markdown inside the modal must wrap/scroll within the dialog instead of
+   blowing it out (long URLs, wide tables). */
+.note-preview-body :deep(.markdown) { overflow-wrap: anywhere; }
+.note-preview-body :deep(.markdown table) { display: block; overflow-x: auto; }
 @media (max-width: 640px) {
   .notes-grid { grid-template-columns: 1fr; }
 }

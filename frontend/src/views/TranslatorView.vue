@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { getTranslateLanguages, translate, type TranslateLanguage } from '../services/api'
+import { useRouter } from 'vue-router'
+import { getTranslateLanguages, translate, type AskMode, type TranslateLanguage } from '../services/api'
 import { useToastStore } from '../stores/toast'
 import PageHeader from '../components/PageHeader.vue'
 import LoadingSpinner from '../components/LoadingSpinner.vue'
+import AppHeader from '../components/AppHeader.vue'
+import AskBox from '../components/AskBox.vue'
 
+const router = useRouter()
 const toast = useToastStore()
 const languages = ref<TranslateLanguage[]>([])
 const languagesError = ref('')
@@ -109,11 +113,23 @@ onMounted(async () => {
   }
 })
 onUnmounted(() => { if (timer) clearTimeout(timer) })
+
+function onAsk(question: string, mode: AskMode) {
+  router.push({ path: '/search', query: { q: question, mode } })
+}
 </script>
 
 <template>
   <main class="page-shell translator-page">
-    <PageHeader eyebrow="Apps" title="Translator" description="Translate text between languages — powered by LibreTranslate." />
+    <AppHeader compact>
+      <template #center>
+        <AskBox variant="google" placeholder="Ask a question, explore an idea…" @submit="onAsk" />
+      </template>
+    </AppHeader>
+
+    <div class="translator-head">
+      <PageHeader eyebrow="Apps" title="Translator" description="Translate text between languages — powered by LibreTranslate." />
+    </div>
     <p v-if="languagesError" class="translator-error" role="alert">{{ languagesError }}</p>
 
     <section class="translator-card">
@@ -171,7 +187,8 @@ onUnmounted(() => { if (timer) clearTimeout(timer) })
 </template>
 
 <style scoped>
-.translator-page { padding-top: 8px; }
+.translator-page { padding-top: 0; }
+.translator-head { margin-top: 28px; }
 .translator-error {
   margin: 0 0 16px;
   padding: 12px 14px;
