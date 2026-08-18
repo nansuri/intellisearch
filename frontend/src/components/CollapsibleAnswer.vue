@@ -90,8 +90,10 @@ function collapse() { emit('update:collapsed', true) }
   gap: 16px;
   /* min-width: 0 lets the grid shrink below its content width so wide
      markdown (tables, long URLs, code) stays inside the parent container
-     on narrow / foldable screens. */
+     on narrow / foldable screens. overflow: hidden clips anything that still
+     manages to escape (wide tables handle their own scroll). */
   min-width: 0;
+  overflow: hidden;
   margin-top: 38px;
   padding: 0 0 28px;
   border-bottom: 1px solid var(--color-border);

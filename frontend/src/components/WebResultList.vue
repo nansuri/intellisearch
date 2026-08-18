@@ -60,7 +60,7 @@ function shortPages(): number[] {
 </template>
 
 <style scoped>
-.web-results { margin-top: 38px; padding-bottom: 4px; }
+.web-results { min-width: 0; margin-top: 38px; padding-bottom: 4px; }
 .web-results-head { margin-bottom: 6px; }
 .web-results-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 18px; }
 .pager-btn {
