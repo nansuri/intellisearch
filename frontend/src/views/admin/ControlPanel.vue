@@ -65,7 +65,8 @@ async function logout() { await auth.logout(); router.push('/login') }
     <aside class="admin-sidebar" :class="{ 'admin-sidebar--open': drawerOpen }">
       <div class="admin-sidebar-inner">
         <router-link class="admin-sidebar-brand" to="/admin" @click="drawerOpen = false">
-          <span class="brand-mark">{{ (site.settings?.siteName || 'CP').slice(0, 2).toUpperCase() }}</span>
+          <img v-if="site.settings?.logoUrl" class="admin-sidebar-logo" :src="site.settings.logoUrl" alt="" />
+          <span v-else class="brand-mark">{{ (site.settings?.siteName || 'CP').slice(0, 2).toUpperCase() }}</span>
           <span class="admin-sidebar-brand-name"><strong>{{ site.settings?.siteName || 'Control Panel' }}</strong><span>Super Owner</span></span>
         </router-link>
         <nav class="admin-nav" aria-label="Control panel">
