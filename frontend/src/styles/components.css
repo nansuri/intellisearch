@@ -78,4 +78,3 @@ select:hover { background: var(--color-surface-subtle); color: var(--color-text)
 .markdown tr:nth-child(even) td { background: color-mix(in srgb, var(--color-surface-subtle) 45%, transparent); }
 @keyframes skeleton-pulse { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 @media (max-width: 520px) { .ask-form { min-height: 58px; padding-left: 14px; } .ask-prompt { display: none; } .ask-form input { font-size: .9rem; } .prompt-list { display: grid; } .prompt-list button { text-align: left; } .error-banner { align-items: flex-start; flex-direction: column; } .markdown { font-size: 1rem; } .markdown table { display: block; overflow-x: auto; } .brand-caption { display: none; } }
-@media (max-width: 380px) { .ask-send-mode { padding: 0 9px; font-size: 0; } }

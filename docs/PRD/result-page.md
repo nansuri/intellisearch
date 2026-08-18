@@ -18,9 +18,11 @@ The main use case of the platform — the app behaves like **AI-as-searchable-it
 ## Follow-up Questions
 
 - The ask box on the result page accepts follow-up questions; submitting keeps the current session context (original question + prior answers) and runs in the same chat session.
+- When a session is active the ask box shows a **radio switch** beside the submit button to pick the send mode: **Follow-up** (continue the current conversation) or **New search** (drop the thread and start fresh).
 - Each follow-up produces its own AI answer, appended to the thread; if new web data is needed, its source cards appear inline.
 - **Suggested follow-ups:** below each summary the AI proposes 2–3 follow-up chips (e.g., "What about air freight?"); tapping a chip submits it as a follow-up.
 - Rate limits and the daily question quota apply to follow-ups exactly like initial questions.
+- Web source snippets are truncated after a configurable character count (`VITE_MAX_SNIPPET_CHARS`, default 180) with a "Read more"/"Show less" toggle when truncated.
 - The result page URL is shareable/deep-linkable (e.g., `/search?q=…`) for the current query.
 
 ## Empty & Error States

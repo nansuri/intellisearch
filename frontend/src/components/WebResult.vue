@@ -1,11 +1,25 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { Source } from '../services/api'
 import { highlightTerms } from '../utils/highlight'
+import { clampSnippet } from '../utils/snippet'
+import { SNIPPET_MAX_CHARS } from '../config/app'
 
-const props = defineProps<{ source: Source; query?: string }>()
+const props = withDefaults(defineProps<{ source: Source; query?: string; maxChars?: number }>(), {
+  query: '',
+  maxChars: SNIPPET_MAX_CHARS,
+})
 
-const snippet = computed(() => highlightTerms(props.source.snippet || '', props.query || ''))
+const expanded = ref(false)
+watch(() => props.source.snippet, () => { expanded.value = false })
+
+const truncated = computed(() => clampSnippet(props.source.snippet || '', props.maxChars))
+const isTruncated = computed(() => truncated.value !== (props.source.snippet || '').trim())
+
+const snippet = computed(() => {
+  const text = expanded.value ? props.source.snippet || '' : truncated.value
+  return highlightTerms(text, props.query || '')
+})
 const iconLetter = computed(() => (props.source.domain || 'w').trim().charAt(0).toUpperCase())
 </script>
 
@@ -19,6 +33,15 @@ const iconLetter = computed(() => (props.source.domain || 'w').trim().charAt(0).
       <span class="web-result-url">{{ props.source.domain }}</span>
       <p class="web-result-snippet" v-html="snippet"></p>
     </a>
+    <button
+      v-if="isTruncated"
+      type="button"
+      class="web-result-more"
+      :aria-expanded="expanded"
+      @click="expanded = !expanded"
+    >
+      {{ expanded ? 'Show less' : 'Read more' }}
+    </button>
   </article>
 </template>
 
@@ -73,4 +96,15 @@ const iconLetter = computed(() => (props.source.domain || 'w').trim().charAt(0).
   color: var(--color-text);
   font-weight: 650;
 }
+.web-result-more {
+  margin: 6px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: .78rem;
+  font-weight: 680;
+  cursor: pointer;
+}
+.web-result-more:hover { text-decoration: underline; }
 </style>
