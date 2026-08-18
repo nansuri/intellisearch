@@ -858,6 +858,26 @@ func TestTranslateEndpoints(t *testing.T) {
 	}
 }
 
+func TestManifestWebmanifest(t *testing.T) {
+	server, db := adminTestMux(t)
+
+	// The PWA manifest is served at the frontend origin with the live branding
+	// and the standard installability fields (raw JSON, no envelope).
+	status, payload := call(t, server, http.MethodGet, "/manifest.webmanifest", "", nil)
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"name":"Intellisearch"`)) || !bytes.Contains(payload, []byte(`"display":"standalone"`)) || !bytes.Contains(payload, []byte(`"pwa-maskable-512x512.png"`)) || bytes.Contains(payload, []byte(`"data":`)) {
+		t.Fatalf("unexpected manifest: %d %s", status, payload)
+	}
+
+	// Branding changes flow through immediately (no-cache manifest).
+	if err := db.Model(&entities.SiteSettings{}).Where("id = 1").Update("site_name", "Acme Search").Error; err != nil {
+		t.Fatal(err)
+	}
+	status, payload = call(t, server, http.MethodGet, "/manifest.webmanifest", "", nil)
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"name":"Acme Search"`)) || bytes.Contains(payload, []byte("Intellisearch")) {
+		t.Fatalf("manifest did not reflect branding: %d %s", status, payload)
+	}
+}
+
 func TestGoogleSSOEndpoints(t *testing.T) {
 	server, _ := adminTestMux(t)
 

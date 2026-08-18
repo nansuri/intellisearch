@@ -1,13 +1,17 @@
 package router
 
 import (
+	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 
 	"intellisearch/internal/contracts"
 	"intellisearch/internal/handlers"
 	"intellisearch/internal/middleware"
+	"intellisearch/internal/models/entities"
 	"intellisearch/internal/services"
 )
 
@@ -16,6 +20,25 @@ func New(corsOrigins, uploadsDir string, siteService *services.SiteService, auth
 	r.Use(gin.Logger(), gin.Recovery(), middleware.ErrorHandler())
 	r.Use(cors(corsOrigins))
 	r.GET("/health", func(c *gin.Context) { middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"status": "ok"})) })
+	// The PWA web manifest lives at the frontend origin and is rendered here so
+	// it always carries the live site_settings branding (site name, tagline,
+	// uploaded logo) — an installed app matches the Owner Control Panel. It is
+	// NOT an API endpoint: raw JSON, no envelope, no-cache so branding edits
+	// propagate immediately.
+	r.GET("/manifest.webmanifest", func(c *gin.Context) {
+		site, err := siteService.Public()
+		if err != nil {
+			logrus.WithError(err).Warn("manifest served with default branding; site settings unavailable")
+			site = entities.SiteSettings{SiteName: "Intellisearch"}
+		}
+		data, err := json.Marshal(siteManifest(site))
+		if err != nil {
+			c.Data(http.StatusInternalServerError, "application/json; charset=utf-8", []byte(`{"error":"manifest unavailable"}`))
+			return
+		}
+		c.Header("Cache-Control", "no-cache")
+		c.Data(http.StatusOK, "application/manifest+json; charset=utf-8", data)
+	})
 	if uploadsDir != "" {
 		r.Static("/uploads", uploadsDir)
 	}
@@ -94,6 +117,45 @@ func New(corsOrigins, uploadsDir string, siteService *services.SiteService, auth
 	admin.POST("/site-settings/favicon", adminHandler.UploadFavicon)
 	admin.DELETE("/site-settings/favicon", adminHandler.DeleteFavicon)
 	return r
+}
+
+// siteManifest builds the PWA manifest JSON from the live site settings. The
+// static icon files ship in the frontend build (frontend/scripts/gen-pwa-icons.mjs)
+// and are referenced relative to the frontend origin; an uploaded logo is
+// appended as an additional high-resolution icon when set.
+func siteManifest(site entities.SiteSettings) map[string]any {
+	name := site.SiteName
+	if name == "" {
+		name = "Intellisearch"
+	}
+	short := name
+	if runes := []rune(short); len(runes) > 12 {
+		short = string(runes[:12])
+	}
+	description := ""
+	if site.Tagline != nil {
+		description = *site.Tagline
+	}
+	icons := []map[string]any{
+		{"src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+		{"src": "/pwa-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+		{"src": "/pwa-maskable-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+	}
+	if site.LogoURL != nil && strings.TrimSpace(*site.LogoURL) != "" {
+		icons = append(icons, map[string]any{"src": *site.LogoURL, "purpose": "any"})
+	}
+	return map[string]any{
+		"id":               "/",
+		"name":             name,
+		"short_name":       short,
+		"description":      description,
+		"start_url":        "/",
+		"scope":            "/",
+		"display":          "standalone",
+		"background_color": "#eef2f9",
+		"theme_color":      "#4f6ef7",
+		"icons":            icons,
+	}
 }
 
 func cors(origins string) gin.HandlerFunc {
