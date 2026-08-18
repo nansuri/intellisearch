@@ -311,7 +311,7 @@ func optionalEncrypt(apiKey string, key []byte) (*string, error) {
 }
 
 // normalizeParameters keeps an empty parameters set as nil so the DB stores JSON null.
-func normalizeParameters(raw json.RawMessage) []byte {
+func normalizeParameters(raw json.RawMessage) json.RawMessage {
 	if len(raw) == 0 || string(raw) == "null" {
 		return nil
 	}

@@ -1,8 +1,10 @@
 package entities
 
 import (
-	"github.com/google/uuid"
+	"encoding/json"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -78,7 +80,10 @@ type AIProvider struct {
 	ProviderType    string    `gorm:"not null" json:"providerType"`
 	BaseURL         string    `gorm:"not null" json:"baseUrl"`
 	Model           string    `gorm:"not null" json:"model"`
-	Parameters      []byte    `gorm:"type:jsonb" json:"parameters"`
+	// Parameters holds the provider's model parameters as raw JSON. It is
+	// json.RawMessage (not []byte) so the API serializes it as a JSON object
+	// instead of a base64 string, and stores as JSONB/null.
+	Parameters      json.RawMessage `gorm:"type:jsonb" json:"parameters"`
 	APIKeyEncrypted *string   `json:"-"`
 	IsActive        bool      `gorm:"not null;default:false" json:"isActive"`
 	CreatedAt       time.Time `json:"createdAt"`

@@ -1,6 +1,8 @@
 package services
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -28,6 +30,36 @@ func TestAdminCreateProviderEncryptsKey(t *testing.T) {
 	stored, err := admin.Provider(provider.ID)
 	if err != nil || stored.Model != "gpt-4o-mini" || !stored.IsActive {
 		t.Fatalf("unexpected stored provider: %#v err=%v", stored, err)
+	}
+}
+
+func TestAdminProviderParametersRoundTripAsJSON(t *testing.T) {
+	db := newTestDB(t)
+	admin := NewAdminService(repositories.NewProviderRepository(db), repositories.NewQueueConfigRepository(db), repositories.NewSiteRepository(db), "k", t.TempDir())
+	// Parameters must round-trip as a JSON object — not a base64 string ([]byte
+	// marshals to base64; json.RawMessage preserves the raw JSON object).
+	created, err := admin.CreateProvider("params", "ollama", "http://localhost:11434", "llama3.2", json.RawMessage(`{"temperature":0.7,"max_tokens":512}`), "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(created)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(raw, []byte(`"parameters":{"temperature":0.7,"max_tokens":512}`)) {
+		t.Fatalf("parameters must serialize as a JSON object, got: %s", raw)
+	}
+	// And the same shape survives a full DB round-trip.
+	stored, err := admin.Provider(created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawStored, err := json.Marshal(stored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(rawStored, []byte(`"parameters":{"temperature":0.7,"max_tokens":512}`)) {
+		t.Fatalf("stored provider parameters must be a JSON object, got: %s", rawStored)
 	}
 }
 
