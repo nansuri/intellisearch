@@ -864,8 +864,20 @@ func TestManifestWebmanifest(t *testing.T) {
 	// The PWA manifest is served at the frontend origin with the live branding
 	// and the standard installability fields (raw JSON, no envelope).
 	status, payload := call(t, server, http.MethodGet, "/manifest.webmanifest", "", nil)
-	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"name":"Intellisearch"`)) || !bytes.Contains(payload, []byte(`"display":"standalone"`)) || !bytes.Contains(payload, []byte(`"pwa-maskable-512x512.png"`)) || bytes.Contains(payload, []byte(`"data":`)) {
-		t.Fatalf("unexpected manifest: %d %s", status, payload)
+	if status != http.StatusOK {
+		t.Fatalf("manifest status: %d %s", status, payload)
+	}
+	if !bytes.Contains(payload, []byte(`"name":"Intellisearch"`)) {
+		t.Fatalf("manifest missing name: %s", payload)
+	}
+	if !bytes.Contains(payload, []byte(`"display":"standalone"`)) {
+		t.Fatalf("manifest missing display: %s", payload)
+	}
+	if !bytes.Contains(payload, []byte("pwa-maskable-512x512.png")) {
+		t.Fatalf("manifest missing maskable icon: %s", payload)
+	}
+	if bytes.Contains(payload, []byte(`"data":`)) {
+		t.Fatalf("manifest must not be an API envelope: %s", payload)
 	}
 
 	// Branding changes flow through immediately (no-cache manifest).
@@ -877,7 +889,6 @@ func TestManifestWebmanifest(t *testing.T) {
 		t.Fatalf("manifest did not reflect branding: %d %s", status, payload)
 	}
 }
-
 func TestGoogleSSOEndpoints(t *testing.T) {
 	server, _ := adminTestMux(t)
 
