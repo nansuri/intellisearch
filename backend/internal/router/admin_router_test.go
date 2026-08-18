@@ -730,6 +730,54 @@ func TestAdminPollinationsEndpoints(t *testing.T) {
 	if status != http.StatusBadRequest {
 		t.Fatalf("expected 400 for unknown provider, got %d", status)
 	}
+
+	// Upstream 402 (balance/budget exhausted) surfaces as ADMN07005 and 429
+	// (rate limited) as ADMN07006 — not the generic unreachable 502.
+	payment := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusPaymentRequired)
+		_, _ = w.Write([]byte(`{"success":false,"error":{"message":"Insufficient pollen balance","code":"PAYMENT_REQUIRED"},"status":402}`))
+	}))
+	defer payment.Close()
+	status, payload = call(t, server, http.MethodPost, "/api/v1/admin/ai/providers", ownerToken, []byte(`{"name":"polli-broke","providerType":"pollinations","baseUrl":"`+payment.URL+`","model":"openai","apiKey":"sk-polli","isActive":false}`))
+	if status != http.StatusOK {
+		t.Fatalf("create payment provider failed: %d %s", status, payload)
+	}
+	var paymentProvider struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(payload, &paymentProvider); err != nil || paymentProvider.Data.ID == "" {
+		t.Fatal("payment provider missing id", payload)
+	}
+	status, payload = call(t, server, http.MethodPost, "/api/v1/admin/ai/pollinations/account", ownerToken, []byte(`{"providerId":"`+paymentProvider.Data.ID+`"}`))
+	if status != http.StatusPaymentRequired || !bytes.Contains(payload, []byte(`"errorCode":"ADMN07005"`)) {
+		t.Fatalf("expected 402 ADMN07005 for exhausted balance, got %d %s", status, payload)
+	}
+
+	limited := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"success":false,"error":{"message":"Slow down","code":"RATE_LIMITED"},"status":429}`))
+	}))
+	defer limited.Close()
+	status, payload = call(t, server, http.MethodPost, "/api/v1/admin/ai/providers", ownerToken, []byte(`{"name":"polli-limited","providerType":"pollinations","baseUrl":"`+limited.URL+`","model":"openai","apiKey":"sk-polli","isActive":false}`))
+	if status != http.StatusOK {
+		t.Fatalf("create rate-limited provider failed: %d %s", status, payload)
+	}
+	var limitedProvider struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(payload, &limitedProvider); err != nil || limitedProvider.Data.ID == "" {
+		t.Fatal("rate-limited provider missing id", payload)
+	}
+	status, payload = call(t, server, http.MethodPost, "/api/v1/admin/ai/pollinations/usage/daily?days=7", ownerToken, []byte(`{"providerId":"`+limitedProvider.Data.ID+`"}`))
+	if status != http.StatusTooManyRequests || !bytes.Contains(payload, []byte(`"errorCode":"ADMN07006"`)) {
+		t.Fatalf("expected 429 ADMN07006 for rate limit, got %d %s", status, payload)
+	}
 }
 
 func TestNotesEndpoints(t *testing.T) {

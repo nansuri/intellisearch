@@ -67,6 +67,10 @@ func (h *PollinationsHandler) respond(c *gin.Context, err error) {
 		middleware.RespondError(c, http.StatusBadGateway, contracts.ADMN07004, "That Pollinations API key is valid but lacks account access — create one with the account:usage / account:balance scopes on enter.pollinations.ai.", "pollinations key missing account scope", err)
 	case errors.Is(err, services.ErrPollinationsUploadFailed):
 		middleware.RespondError(c, http.StatusBadGateway, contracts.ADMN07003, "The image could not be uploaded to Pollinations.", "pollinations upload failed", err)
+	case errors.Is(err, services.ErrPollinationsPaymentRequired):
+		middleware.RespondError(c, http.StatusPaymentRequired, contracts.ADMN07005, "Pollinations balance or API-key budget is exhausted — top up or raise the key budget at enter.pollinations.ai.", "pollinations balance exhausted", err)
+	case errors.Is(err, services.ErrPollinationsRateLimited):
+		middleware.RespondError(c, http.StatusTooManyRequests, contracts.ADMN07006, "Pollinations is rate-limiting requests — wait a moment and try again.", "pollinations rate limited", err)
 	default:
 		middleware.RespondError(c, http.StatusBadGateway, contracts.ADMN07001, "Couldn't reach the Pollinations account API — try again in a moment.", "pollinations account request failed", err)
 	}

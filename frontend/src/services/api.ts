@@ -34,6 +34,8 @@ export const FRIENDLY_ERRORS: Record<string, string> = {
   ADMN07002: 'That Pollinations API key was rejected — check it\'s valid and has account access.',
   ADMN07003: 'The image could not be uploaded to Pollinations.',
   ADMN07004: "That Pollinations API key is valid but lacks account access — create one with the account:usage / account:balance scopes on enter.pollinations.ai.",
+  ADMN07005: 'Pollinations balance or API-key budget is exhausted — top up or raise the key budget at enter.pollinations.ai.',
+  ADMN07006: 'Pollinations is rate-limiting requests — wait a moment and try again.',
   STTS01001: 'Visitor statistics could not be loaded.',
   HTTP_PROXY: 'Backend is not reachable — start the API (run-local.sh) and retry.',
 }

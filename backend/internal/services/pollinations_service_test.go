@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -50,8 +51,8 @@ func TestPollinationsAccountBalanceShapes(t *testing.T) {
 	}
 }
 
-// TestPollinationsAccountStatusMapping verifies that 401, 403, and 5xx
-// upstream statuses map to their distinct sentinel errors.
+// TestPollinationsAccountStatusMapping verifies that 401, 403, 402, 429, and
+// 5xx upstream statuses map to their distinct sentinel errors.
 func TestPollinationsAccountStatusMapping(t *testing.T) {
 	cases := []struct {
 		name string
@@ -60,6 +61,8 @@ func TestPollinationsAccountStatusMapping(t *testing.T) {
 	}{
 		{"unauthorized", http.StatusUnauthorized, ErrPollinationsUnauthorized},
 		{"missing scope", http.StatusForbidden, ErrPollinationsForbidden},
+		{"payment required", http.StatusPaymentRequired, ErrPollinationsPaymentRequired},
+		{"rate limited", http.StatusTooManyRequests, ErrPollinationsRateLimited},
 		{"upstream error", http.StatusInternalServerError, ErrPollinationsUnavailable},
 	}
 	for _, tc := range cases {
@@ -83,5 +86,29 @@ func TestPollinationsAccountStatusMapping(t *testing.T) {
 				t.Fatalf("expected %v, got %v", tc.want, err)
 			}
 		})
+	}
+}
+
+// TestPollinationsUpstreamMessageSurfaces verifies that a non-2xx response
+// carrying the Pollinations error envelope includes the upstream's own message
+// in the surfaced error, so the failure is diagnosable from logs alone.
+func TestPollinationsUpstreamMessageSurfaces(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"success":false,"error":{"message":"safety/balance check service degraded","code":"SERVICE_UNAVAILABLE"},"status":503}`))
+	}))
+	defer upstream.Close()
+
+	service := NewPollinationsService("https://media.pollinations.ai")
+	_, _, _, err := service.Account(context.Background(), upstream.URL, "sk-test")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+	if !errors.Is(err, ErrPollinationsUnavailable) {
+		t.Fatalf("expected ErrPollinationsUnavailable, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "status 503") || !strings.Contains(err.Error(), "safety/balance check service degraded") {
+		t.Fatalf("unavailable error should carry the upstream status and message, got %q", err)
 	}
 }

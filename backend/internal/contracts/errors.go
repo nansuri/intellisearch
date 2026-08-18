@@ -119,6 +119,12 @@ const ADMN07003 = "ADMN07003"
 // scope the endpoint requires (e.g. account:usage or account:balance).
 const ADMN07004 = "ADMN07004"
 
+// ADMN07005 indicates the Pollinations account balance or API-key budget is exhausted.
+const ADMN07005 = "ADMN07005"
+
+// ADMN07006 indicates the Pollinations API rate limit was exceeded.
+const ADMN07006 = "ADMN07006"
+
 // NOTE01001 indicates the user's notes could not be loaded.
 const NOTE01001 = "NOTE01001"
 

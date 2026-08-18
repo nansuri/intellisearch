@@ -24,6 +24,11 @@ var (
 	// ErrPollinationsForbidden indicates the Pollinations API key is valid but
 	// lacks the account scope required by the endpoint (upstream 403).
 	ErrPollinationsForbidden = errors.New("pollinations api key missing account scope")
+	// ErrPollinationsPaymentRequired indicates the account or API-key budget is
+	// exhausted (upstream 402).
+	ErrPollinationsPaymentRequired = errors.New("pollinations balance or budget exhausted")
+	// ErrPollinationsRateLimited indicates the upstream rate limit was hit (429).
+	ErrPollinationsRateLimited = errors.New("pollinations rate limited")
 	// ErrPollinationsUploadFailed indicates a Pollinations media upload failed.
 	ErrPollinationsUploadFailed = errors.New("pollinations upload failed")
 )
@@ -103,7 +108,11 @@ type PollinationsService struct {
 
 func NewPollinationsService(mediaBaseURL string) *PollinationsService {
 	return &PollinationsService{
-		client:    &http.Client{Timeout: 10 * time.Second},
+		// The account/usage endpoints aggregate data across providers and can be
+		// slow (the docs note the balance-check service occasionally degrades),
+		// so the timeout is generous rather than the tight 10s that caused
+		// spurious "unreachable" failures.
+		client:    &http.Client{Timeout: 30 * time.Second},
 		mediaBase: strings.TrimRight(mediaBaseURL, "/"),
 	}
 }
@@ -130,10 +139,39 @@ func (s *PollinationsService) read(ctx context.Context, baseURL, apiKey, path st
 		return nil, ErrPollinationsUnauthorized
 	case response.StatusCode == http.StatusForbidden:
 		return nil, ErrPollinationsForbidden
+	case response.StatusCode == http.StatusPaymentRequired:
+		return nil, ErrPollinationsPaymentRequired
+	case response.StatusCode == http.StatusTooManyRequests:
+		return nil, ErrPollinationsRateLimited
 	case response.StatusCode != http.StatusOK:
+		body, _ := io.ReadAll(response.Body)
+		if detail := upstreamErrorMessage(body); detail != "" {
+			return nil, fmt.Errorf("%w: status %d (%s)", ErrPollinationsUnavailable, response.StatusCode, detail)
+		}
 		return nil, fmt.Errorf("%w: status %d", ErrPollinationsUnavailable, response.StatusCode)
 	}
 	return io.ReadAll(response.Body)
+}
+
+// upstreamErrorMessage extracts the human-readable message from the
+// Pollinations error envelope ({"success":false,"error":{"message":...}})
+// so non-2xx failures carry the upstream's own explanation into the logs. It
+// is safe to surface: it comes from Pollinations, never from user content or
+// credentials, and is truncated.
+func upstreamErrorMessage(body []byte) string {
+	var payload struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil || payload.Error.Message == "" {
+		return ""
+	}
+	message := strings.TrimSpace(payload.Error.Message)
+	if runes := []rune(message); len(runes) > 160 {
+		message = string(runes[:160]) + "…"
+	}
+	return message
 }
 
 // doJSON performs an authenticated GET and decodes the JSON response body.
