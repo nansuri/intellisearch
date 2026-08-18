@@ -42,12 +42,25 @@ export class ApiError extends Error {
 }
 
 const base = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+
+// The API always answers with the JSON envelope. If a proxy (nginx/Vite) or a
+// stale backend answers with a web page instead (e.g. an SPA fallback or a 502
+// error page), parse the envelope safely and surface a clear message rather than
+// the cryptic `Unexpected token '<', "<!DOCTYPE ... is not valid JSON"`.
+async function parseEnvelope<T>(response: Response, fallbackMessage: string): Promise<Envelope<T>> {
+  const type = response.headers.get('Content-Type') || ''
+  if (!type.includes('application/json')) {
+    throw new ApiError('HTTP_HTML', 'The server returned a web page instead of a JSON response — the API may be outdated or unreachable. Try refreshing.')
+  }
+  const body = await response.json() as Envelope<T>
+  if (!response.ok || body.errorCode) throw new ApiError(body.errorCode || 'HTTP_ERROR', body.errorMessage || fallbackMessage)
+  return body
+}
+
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('token')
   const response = await fetch(`${base}${path}`, { ...options, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers } })
-  const body = await response.json() as Envelope<T>
-  if (!response.ok || body.errorCode) throw new ApiError(body.errorCode || 'HTTP_ERROR', body.errorMessage || 'The request failed.')
-  return body.data
+  return (await parseEnvelope<T>(response, 'The request failed.')).data
 }
 
 export async function upload<T>(path: string, field: string, file: File): Promise<T> {
@@ -55,9 +68,7 @@ export async function upload<T>(path: string, field: string, file: File): Promis
   const form = new FormData()
   form.append(field, file)
   const response = await fetch(`${base}${path}`, { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: form })
-  const body = await response.json() as Envelope<T>
-  if (!response.ok || body.errorCode) throw new ApiError(body.errorCode || 'HTTP_ERROR', body.errorMessage || 'The upload failed.')
-  return body.data
+  return (await parseEnvelope<T>(response, 'The upload failed.')).data
 }
 
 export type SiteSettings = { siteName: string; logoUrl: string | null; faviconUrl: string | null; tagline: string | null; copyright: string | null; googleSsoEnabled?: boolean }
@@ -202,9 +213,7 @@ export const uploadPollinationsImage = async (input: PollinationsCredentialsInpu
   form.append('file', file)
   const token = localStorage.getItem('token')
   const response = await fetch(`${base}/admin/ai/pollinations/upload`, { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: form })
-  const body = await response.json() as Envelope<PollinationsUploadResult>
-  if (!response.ok || body.errorCode) throw new ApiError(body.errorCode || 'HTTP_ERROR', body.errorMessage || 'The upload failed.')
-  return body.data
+  return (await parseEnvelope<PollinationsUploadResult>(response, 'The upload failed.')).data
 }
 
 // Admin — branding
