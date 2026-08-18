@@ -21,6 +21,8 @@ const ICONS: Record<string, string> = {
   queue: '<path d="M6 7h12"/><path d="M6 12h8"/><path d="M6 17h10"/><circle cx="18" cy="17" r="2"/>',
   tag: '<path d="M4 10.5V6a2 2 0 0 1 2-2h4.5L20 13.5 13.5 20 4 10.5z"/><circle cx="9" cy="9" r="1.2"/>',
   image: '<rect x="4" y="5" width="16" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="m4 16 4.5-4.5 3 3L15 11l5 5"/>',
+  note: '<path d="M13.5 3H7a1.5 1.5 0 0 0-1.5 1.5v15A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5V8.5L13.5 3z"/><path d="M13.5 3v5.5H19"/><path d="M9 13h6M9 16.5h6"/>',
+  translate: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a13.8 13.8 0 0 1 0 18 13.8 13.8 0 0 1 0-18z"/>',
 }
 </script>
 

@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import AdminIcon from './admin/AdminIcon.vue'
 
 const router = useRouter()
 const open = ref(false)
 const root = ref<HTMLElement | null>(null)
 
 const apps = [
-  { to: '/notes', label: 'Notes', desc: 'Save and organize summaries', icon: '📝' },
-  { to: '/translator', label: 'Translator', desc: 'Google-style translate', icon: '🌐' },
+  { to: '/notes', label: 'Notes', desc: 'Save and organize summaries', icon: 'note' },
+  { to: '/translator', label: 'Translator', desc: 'Google-style translate', icon: 'translate' },
 ]
 
 function toggle() { open.value = !open.value }
@@ -58,7 +59,7 @@ onUnmounted(() => {
         <div class="app-drawer-label">Apps</div>
         <div class="app-drawer-grid">
           <button v-for="app in apps" :key="app.to" type="button" class="app-drawer-app" role="menuitem" @click="go(app.to)">
-            <span class="app-drawer-icon" aria-hidden="true">{{ app.icon }}</span>
+            <span class="app-drawer-icon" aria-hidden="true"><AdminIcon :name="app.icon" :size="20" /></span>
             <span class="app-drawer-app-copy">
               <strong>{{ app.label }}</strong>
               <span>{{ app.desc }}</span>
@@ -130,7 +131,7 @@ onUnmounted(() => {
   flex: 0 0 auto;
   border-radius: 11px;
   background: linear-gradient(135deg, var(--color-surface-subtle), color-mix(in srgb, var(--color-primary) 16%, var(--color-surface-subtle)));
-  font-size: 1.15rem;
+  color: var(--color-primary);
 }
 .app-drawer-app-copy { display: grid; gap: 1px; min-width: 0; }
 .app-drawer-app-copy strong { font-size: .88rem; letter-spacing: -.01em; }
