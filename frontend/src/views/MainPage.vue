@@ -118,11 +118,27 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.history-panel { display: grid; gap: 16px; max-width: 720px; margin: 22px auto 0; text-align: left; }
+/* Anchored to the hero's bottom edge instead of participating in the flex
+   centering, so loading "Suggested for you" never pushes the title/ask box
+   off-center. max-height + scroll keeps it clear of the centered box on
+   short screens. */
+.history-panel {
+  position: absolute;
+  inset-inline: 0;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  max-width: 720px;
+  max-height: 42%;
+  margin: 0 auto;
+  overflow-y: auto;
+  text-align: left;
+}
 .history-group { display: grid; gap: 8px; }
 .history-label { color: var(--color-muted); font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .history-refresh { margin-left: 6px; padding: 0 4px; border: 0; background: transparent; color: var(--color-muted); cursor: pointer; font-size: .85rem; }
 .history-refresh:hover { color: var(--color-primary); }
 .history-note { margin: 0; color: var(--color-muted); font-size: .78rem; }
-@media (max-width: 520px) { .history-panel { margin-top: 18px; } }
+@media (max-width: 520px) { .history-panel { bottom: 12px; } }
 </style>

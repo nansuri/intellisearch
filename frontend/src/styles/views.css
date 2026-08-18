@@ -5,6 +5,7 @@
    history/suggestions panel never clips. */
 .main-page { display: flex; flex-direction: column; }
 .hero {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
