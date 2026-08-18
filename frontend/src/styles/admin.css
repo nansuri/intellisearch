@@ -15,10 +15,20 @@
 
 /* Shell & layout ----------------------------------------------------------- */
 .admin-shell { position: relative; display: flex; min-height: 100dvh; background: var(--color-bg) var(--color-bg-glow); color: var(--color-text); }
-.admin-main { min-width: 0; flex: 1; }
+/* The sidebar is fixed (not sticky): sticky is bounded by its parent's height,
+   so once the admin content ends and the site footer scrolls into view the
+   sidebar would scroll up with it. Fixed keeps it pinned regardless of how
+   tall the main container is. .admin-main offsets it with a left margin. */
+.admin-main { min-width: 0; flex: 1; margin-left: 248px; }
+
+/* The global page transition animates transform on the routed root. That turns
+   the shell into a containing block for its fixed sidebar during the ~220ms
+   route change, making the sidebar jump. Fade-only on the admin shell. */
+.admin-shell.page-enter-active, .admin-shell.page-leave-active { transition: opacity .22s ease; will-change: opacity; }
+.admin-shell.page-enter-from, .admin-shell.page-leave-to { transform: none; filter: none; opacity: 0; }
 
 /* Sidebar — Apple-style frosted material with hairline divider ------------- */
-.admin-sidebar { width: 248px; flex: 0 0 248px; border-right: 1px solid var(--color-border); background: color-mix(in srgb, var(--color-surface) 62%, transparent); -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); position: sticky; top: 0; height: 100dvh; overflow-y: auto; }
+.admin-sidebar { position: fixed; top: 0; left: 0; z-index: 40; width: 248px; height: 100dvh; overflow-y: auto; border-right: 1px solid var(--color-border); background: color-mix(in srgb, var(--color-surface) 62%, transparent); -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); }
 .admin-sidebar-inner { display: flex; flex-direction: column; gap: 18px; padding: 24px 14px 30px; }
 .admin-sidebar-brand { display: inline-flex; align-items: center; justify-content: center; gap: 10px; margin: 0 auto 6px; padding: 8px 12px; border-radius: 12px; text-decoration: none; transition: background .15s ease; }
 .admin-sidebar-brand:hover { background: var(--color-surface-subtle); }
@@ -276,6 +286,7 @@
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateY(8px); }
 
 @media (max-width: 1023px) {
+  .admin-main { margin-left: 0; }
   .admin-sidebar { position: fixed; top: 0; left: 0; z-index: 70; width: min(280px, 84vw); height: 100dvh; transform: translateX(-105%); transition: transform .22s ease; border-right: 1px solid var(--color-border); box-shadow: 0 0 60px var(--color-shadow); }
   .admin-sidebar--open { transform: translateX(0); }
   .admin-drawer-backdrop { display: block; position: fixed; inset: 0; z-index: 65; background: rgba(5, 8, 16, .5); backdrop-filter: blur(3px); animation: fade-in .16s ease; }
