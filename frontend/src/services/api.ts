@@ -113,7 +113,7 @@ export type ProviderType = 'ollama' | 'openai_compatible' | 'pollinations' | 'hu
 export type Provider = { id: string; name: string; providerType: ProviderType; baseUrl: string; model: string; parameters: Record<string, unknown> | null; isActive: boolean }
 export type HistoryItem = { id: number; query: string; createdAt: string; sessionId?: string; summary?: string }
 export type HistoryPage = { items: HistoryItem[]; total: number; page: number; pageSize: number }
-export type Note = { id: number; userId: string; title: string; content: string; sourceQuery?: string; sessionId?: string; createdAt: string; updatedAt: string }
+export type Note = { id: string; userId: string; title: string; content: string; sourceQuery?: string; sessionId?: string; createdAt: string; updatedAt: string }
 export type TranslateLanguage = { code: string; name: string }
 export type TranslateResult = { translatedText: string }
 export type QueueConfig = { maxConcurrent: number; maxQueueSize: number; requestTimeoutMs: number; perUserRateLimit: number; suggestionCacheHours: number; defaultDailyQuota: number; maxImageResults: number; sessionTtlHours: number }
@@ -187,11 +187,12 @@ export const getHistoryPage = (page = 1, pageSize = 20) => request<HistoryPage>(
 export const getHistorySuggestions = (refresh = false) => request<{ suggestions: string[] }>(`/me/history/suggestions${refresh ? '?refresh=1' : ''}`)
 export const clearHistory = () => request<{ cleared: boolean }>('/me/history', { method: 'DELETE' })
 
-// Mini apps — notes
+// Mini apps — notes. Note ids are time-based uint64 values, serialized by the
+// API as strings (they exceed Number.MAX_SAFE_INTEGER), so they stay exact here.
 export const listNotes = () => request<{ items: Note[] }>('/me/notes')
 export const createNote = (input: { title: string; content: string; sourceQuery?: string; sessionId?: string }) => request<Note>('/me/notes', { method: 'POST', body: JSON.stringify(input) })
-export const updateNote = (id: number, input: { title: string; content: string }) => request<Note>(`/me/notes/${id}`, { method: 'PATCH', body: JSON.stringify(input) })
-export const deleteNote = (id: number) => request<{ deleted: boolean }>(`/me/notes/${id}`, { method: 'DELETE' })
+export const updateNote = (id: string, input: { title: string; content: string }) => request<Note>(`/me/notes/${id}`, { method: 'PATCH', body: JSON.stringify(input) })
+export const deleteNote = (id: string) => request<{ deleted: boolean }>(`/me/notes/${id}`, { method: 'DELETE' })
 
 // Mini apps — translator (proxied server-side to LibreTranslate)
 export const getTranslateLanguages = () => request<{ languages: TranslateLanguage[] }>('/translate/languages')

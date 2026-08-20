@@ -843,11 +843,15 @@ func TestNotesEndpoints(t *testing.T) {
 	}
 	var created struct {
 		Data struct {
-			ID uint64 `json:"id"`
+			ID string `json:"id"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal(payload, &created); err != nil || created.Data.ID == 0 {
+	if err := json.Unmarshal(payload, &created); err != nil || created.Data.ID == "" {
 		t.Fatal("note missing id", payload)
+	}
+	id, idErr := strconv.ParseUint(created.Data.ID, 10, 64)
+	if idErr != nil || id == 0 {
+		t.Fatalf("note id must be a numeric string, got %q (err=%v)", created.Data.ID, idErr)
 	}
 
 	status, payload = call(t, server, http.MethodGet, "/api/v1/me/notes", token, nil)
@@ -856,21 +860,21 @@ func TestNotesEndpoints(t *testing.T) {
 	}
 
 	// Another user cannot update or delete jane's note.
-	status, _ = call(t, server, http.MethodPatch, "/api/v1/me/notes/"+strconv.FormatUint(created.Data.ID, 10), anon, []byte(`{"title":"hijack","content":"nope"}`))
+	status, _ = call(t, server, http.MethodPatch, "/api/v1/me/notes/"+created.Data.ID, anon, []byte(`{"title":"hijack","content":"nope"}`))
 	if status != http.StatusNotFound {
 		t.Fatalf("expected 404 for cross-user update, got %d", status)
 	}
-	status, _ = call(t, server, http.MethodDelete, "/api/v1/me/notes/"+strconv.FormatUint(created.Data.ID, 10), anon, nil)
+	status, _ = call(t, server, http.MethodDelete, "/api/v1/me/notes/"+created.Data.ID, anon, nil)
 	if status != http.StatusNotFound {
 		t.Fatalf("expected 404 for cross-user delete, got %d", status)
 	}
 
 	// Jane edits and then deletes her own note.
-	status, payload = call(t, server, http.MethodPatch, "/api/v1/me/notes/"+strconv.FormatUint(created.Data.ID, 10), token, []byte(`{"title":"Tokyo v2","content":"Updated."}`))
+	status, payload = call(t, server, http.MethodPatch, "/api/v1/me/notes/"+created.Data.ID, token, []byte(`{"title":"Tokyo v2","content":"Updated."}`))
 	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"title":"Tokyo v2"`)) {
 		t.Fatalf("update note failed: %d %s", status, payload)
 	}
-	status, payload = call(t, server, http.MethodDelete, "/api/v1/me/notes/"+strconv.FormatUint(created.Data.ID, 10), token, nil)
+	status, payload = call(t, server, http.MethodDelete, "/api/v1/me/notes/"+created.Data.ID, token, nil)
 	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"deleted":true`)) {
 		t.Fatalf("delete note failed: %d %s", status, payload)
 	}

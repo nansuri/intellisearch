@@ -194,8 +194,12 @@ type SearchHistory struct {
 // Note is a user-owned mini-app note. It doubles as a "save summary to
 // notes" target from the result page, so it optionally links back to the
 // search (source query + session) that produced the content.
+// Note is a personal note. ID is a uint64 time-based value (~1.78e18, far past
+// Number.MAX_SAFE_INTEGER), so it is serialized as a JSON STRING — a JSON
+// number would round-trip through the browser's Number and the note could not
+// be found when updating/deleting (the browser would send a rounded id).
 type Note struct {
-	ID          uint64     `gorm:"primaryKey" json:"id"`
+	ID          uint64     `gorm:"primaryKey" json:"id,string"`
 	UserID      uuid.UUID  `gorm:"type:uuid;not null;index:idx_notes_user,priority:1" json:"userId"`
 	Title       string     `gorm:"not null" json:"title"`
 	Content     string     `gorm:"type:text;not null" json:"content"`
