@@ -2,12 +2,14 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -388,5 +390,99 @@ func TestAnswerSkipsImagesOnFollowUp(t *testing.T) {
 	var count int64
 	if err := db.Model(&entities.ImageResult{}).Where("message_id = ?", followUp.MessageID).Count(&count).Error; err != nil || count != 0 {
 		t.Fatalf("follow-up must not persist images, got %d (err=%v)", count, err)
+	}
+}
+
+// seedSuggestConversation inserts a session plus a completed user/assistant
+// pair so SuggestFollowUps has a transcript to build on.
+func seedSuggestConversation(t *testing.T, db *gorm.DB, userID *uuid.UUID) uuid.UUID {
+	t.Helper()
+	sessionID := uuid.New()
+	now := time.Now().UTC()
+	if err := db.Create(&entities.ChatSession{ID: sessionID, UserID: userID, Title: "test", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&entities.Message{ID: uuid.New(), SessionID: sessionID, Role: entities.MessageRoleUser, Content: "What are shipping costs to Japan?", Status: entities.MessageStatusCompleted, CreatedAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&entities.Message{ID: uuid.New(), SessionID: sessionID, Role: entities.MessageRoleAssistant, Content: "Roughly $50 for a small parcel.", Status: entities.MessageStatusCompleted, CreatedAt: now.Add(time.Second)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	return sessionID
+}
+
+// repointActiveLLM points the active provider at a server returning the given
+// chat content (any path), returning a hit counter so tests can assert that no
+// model call happens when it shouldn't.
+func repointActiveLLM(t *testing.T, db *gorm.DB, content string) *int64 {
+	t.Helper()
+	var hits int64
+	llm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&hits, 1)
+		payload, err := json.Marshal(map[string]any{"message": map[string]any{"content": content}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = w.Write(payload)
+	}))
+	t.Cleanup(llm.Close)
+	if err := db.Model(&entities.AIProvider{}).Where("is_active = ?", true).Update("base_url", llm.URL).Error; err != nil {
+		t.Fatal(err)
+	}
+	return &hits
+}
+
+func TestSuggestFollowUpsComposesFromConversation(t *testing.T) {
+	service, db, _ := newAITestEnv(t, false)
+	sessionID := seedSuggestConversation(t, db, nil)
+	hits := repointActiveLLM(t, db, `["Is air freight faster?","What do couriers charge?","How is insurance handled?"]`)
+	items, err := service.SuggestFollowUps(context.Background(), nil, sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 3 || items[0] != "Is air freight faster?" {
+		t.Fatalf("unexpected suggestions %#v", items)
+	}
+	if *hits != 1 {
+		t.Fatalf("expected exactly 1 LLM call, got %d", *hits)
+	}
+}
+
+func TestSuggestFollowUpsEmptyConversationSkipsLLM(t *testing.T) {
+	service, db, _ := newAITestEnv(t, false)
+	sessionID := uuid.New()
+	now := time.Now().UTC()
+	if err := db.Create(&entities.ChatSession{ID: sessionID, Title: "fresh", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	hits := repointActiveLLM(t, db, "[]")
+	items, err := service.SuggestFollowUps(context.Background(), nil, sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("expected empty suggestions, got %#v", items)
+	}
+	if *hits != 0 {
+		t.Fatalf("empty conversation must not call the LLM, got %d hits", *hits)
+	}
+}
+
+func TestSuggestFollowUpsErrors(t *testing.T) {
+	service, db, _ := newAITestEnv(t, false)
+	if _, err := service.SuggestFollowUps(context.Background(), nil, uuid.New()); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("expected ErrSessionNotFound, got %v", err)
+	}
+	owner := uuid.New()
+	sessionID := seedSuggestConversation(t, db, &owner)
+	if _, err := service.SuggestFollowUps(context.Background(), nil, sessionID); !errors.Is(err, ErrSessionForbidden) {
+		t.Fatalf("expected ErrSessionForbidden for anonymous caller, got %v", err)
+	}
+	other := uuid.New()
+	if _, err := service.SuggestFollowUps(context.Background(), &other, sessionID); !errors.Is(err, ErrSessionForbidden) {
+		t.Fatalf("expected ErrSessionForbidden for wrong owner, got %v", err)
+	}
+	if _, err := service.SuggestFollowUps(context.Background(), &owner, sessionID); err != nil {
+		t.Fatalf("expected owner to succeed, got %v", err)
 	}
 }

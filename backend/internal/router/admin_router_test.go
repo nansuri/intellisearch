@@ -34,6 +34,9 @@ func (allowingLimiter) Allow(context.Context, string, string, int, time.Duration
 func (fakeRunner) Answer(ctx context.Context, input services.AskInput) (services.AskResult, error) {
 	return services.AskResult{Answer: "ok"}, nil
 }
+func (fakeRunner) SuggestFollowUps(ctx context.Context, userID *uuid.UUID, sessionID uuid.UUID) ([]string, error) {
+	return nil, nil
+}
 
 func adminTestMux(t *testing.T) (*httptest.Server, *gorm.DB) {
 	t.Helper()
@@ -170,8 +173,12 @@ func TestRegisterVisitTrackingEndToEnd(t *testing.T) {
 	}
 	var summary struct {
 		Data struct {
-			RegisteredUsers    struct{ Total int64 `json:"total"` } `json:"registeredUsers"`
-			AnonymousVisitors  struct{ Total int64 `json:"total"` } `json:"anonymousVisitors"`
+			RegisteredUsers struct {
+				Total int64 `json:"total"`
+			} `json:"registeredUsers"`
+			AnonymousVisitors struct {
+				Total int64 `json:"total"`
+			} `json:"anonymousVisitors"`
 			RegisterPageVisits struct {
 				Total int64 `json:"total"`
 				Daily []struct {
@@ -580,10 +587,12 @@ func TestSearchHistoryEndpoints(t *testing.T) {
 	}
 	var paginated struct {
 		Data struct {
-			Items    []struct{ Query string `json:"query"` } `json:"items"`
-			Total    int64  `json:"total"`
-			Page     int    `json:"page"`
-			PageSize int    `json:"pageSize"`
+			Items []struct {
+				Query string `json:"query"`
+			} `json:"items"`
+			Total    int64 `json:"total"`
+			Page     int   `json:"page"`
+			PageSize int   `json:"pageSize"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(payload, &paginated); err != nil {

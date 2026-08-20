@@ -25,8 +25,12 @@ import (
 type allowLimiter struct{}
 type denyLimiter struct{}
 
-func (allowLimiter) Allow(context.Context, string, string, int, time.Duration) (bool, error) { return true, nil }
-func (denyLimiter) Allow(context.Context, string, string, int, time.Duration) (bool, error)  { return false, nil }
+func (allowLimiter) Allow(context.Context, string, string, int, time.Duration) (bool, error) {
+	return true, nil
+}
+func (denyLimiter) Allow(context.Context, string, string, int, time.Duration) (bool, error) {
+	return false, nil
+}
 
 type fakeRunner struct {
 	release chan struct{}
@@ -48,6 +52,14 @@ func (r *fakeRunner) Answer(ctx context.Context, input services.AskInput) (servi
 		return services.AskResult{}, r.err
 	}
 	return r.result, nil
+}
+
+func (r *fakeRunner) SuggestFollowUps(ctx context.Context, userID *uuid.UUID, sessionID uuid.UUID) ([]string, error) {
+	r.calls.Add(1)
+	if r.err != nil {
+		return nil, r.err
+	}
+	return []string{"q1", "q2", "q3"}, nil
 }
 
 func handlerTestDB(t *testing.T) *gorm.DB {
@@ -277,5 +289,73 @@ func TestEnqueueSuccess(t *testing.T) {
 	}
 	if result.Answer != "an answer" || runner.calls.Load() != 1 {
 		t.Fatalf("unexpected result %#v, calls %d", result, runner.calls.Load())
+	}
+}
+
+// suggestionsRequest calls handler.SessionSuggestions and returns the recorder.
+func suggestionsRequest(t *testing.T, handler *AIHandler, id string, ip string) *httptest.ResponseRecorder {
+	t.Helper()
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "id", Value: id}}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/sessions/"+id+"/suggestions", nil)
+	req.RemoteAddr = ip + ":1234"
+	c.Request = req
+	handler.SessionSuggestions(c)
+	return w
+}
+
+func TestSessionSuggestionsSuccess(t *testing.T) {
+	db := handlerTestDB(t)
+	seedQueueConfig(t, db, entities.AIQueueConfig{MaxConcurrent: 1, MaxQueueSize: 5, RequestTimeoutMS: 60000, PerUserRateLimit: 10})
+	handler := NewAIHandler(&fakeRunner{}, repositories.NewQueueConfigRepository(db), repositories.NewUserRepository(db), repositories.NewUsageLogRepository(db), repositories.NewAnonymousUsageRepository(db), allowLimiter{}, nil)
+	defer handler.Stop()
+	w := suggestionsRequest(t, handler, uuid.New().String(), "10.0.0.1")
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var envelope struct {
+		Data struct {
+			Suggestions []string `json:"suggestions"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if len(envelope.Data.Suggestions) != 3 || envelope.Data.Suggestions[0] != "q1" {
+		t.Fatalf("unexpected suggestions %#v", envelope.Data.Suggestions)
+	}
+}
+
+func TestSessionSuggestionsRateLimited(t *testing.T) {
+	db := handlerTestDB(t)
+	seedQueueConfig(t, db, entities.AIQueueConfig{MaxConcurrent: 1, MaxQueueSize: 5, RequestTimeoutMS: 60000, PerUserRateLimit: 10})
+	handler := NewAIHandler(&fakeRunner{}, repositories.NewQueueConfigRepository(db), repositories.NewUserRepository(db), repositories.NewUsageLogRepository(db), repositories.NewAnonymousUsageRepository(db), denyLimiter{}, nil)
+	defer handler.Stop()
+	w := suggestionsRequest(t, handler, uuid.New().String(), "10.0.0.2")
+	if w.Code != http.StatusTooManyRequests || !strings.Contains(w.Body.String(), "AISY02002") {
+		t.Fatalf("expected 429 AISY02002, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestSessionSuggestionsNotFound(t *testing.T) {
+	db := handlerTestDB(t)
+	seedQueueConfig(t, db, entities.AIQueueConfig{MaxConcurrent: 1, MaxQueueSize: 5, RequestTimeoutMS: 60000, PerUserRateLimit: 10})
+	handler := NewAIHandler(&fakeRunner{err: services.ErrSessionNotFound}, repositories.NewQueueConfigRepository(db), repositories.NewUserRepository(db), repositories.NewUsageLogRepository(db), repositories.NewAnonymousUsageRepository(db), allowLimiter{}, nil)
+	defer handler.Stop()
+	w := suggestionsRequest(t, handler, uuid.New().String(), "10.0.0.3")
+	if w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "SESS01001") {
+		t.Fatalf("expected 404 SESS01001, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestSessionSuggestionsInvalidID(t *testing.T) {
+	db := handlerTestDB(t)
+	seedQueueConfig(t, db, entities.AIQueueConfig{MaxConcurrent: 1, MaxQueueSize: 5, RequestTimeoutMS: 60000, PerUserRateLimit: 10})
+	handler := NewAIHandler(&fakeRunner{}, repositories.NewQueueConfigRepository(db), repositories.NewUserRepository(db), repositories.NewUsageLogRepository(db), repositories.NewAnonymousUsageRepository(db), allowLimiter{}, nil)
+	defer handler.Stop()
+	w := suggestionsRequest(t, handler, "not-a-uuid", "10.0.0.4")
+	if w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "SESS01001") {
+		t.Fatalf("expected 404 SESS01001, got %d: %s", w.Code, w.Body.String())
 	}
 }

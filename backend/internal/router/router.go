@@ -66,6 +66,7 @@ func New(corsOrigins, uploadsDir string, siteService *services.SiteService, auth
 	v1.POST("/ask/url", aiHandler.AskURL)
 	v1.POST("/stats/register-visit", visitorHandler.TrackRegisterVisit)
 	v1.GET("/sessions/:id", sessionHandler.Get)
+	v1.POST("/sessions/:id/suggestions", aiHandler.SessionSuggestions)
 	protected := v1.Group("")
 	protected.Use(middleware.RequireAuth(authService))
 	protected.GET("/me", userHandler.Me)

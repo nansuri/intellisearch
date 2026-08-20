@@ -300,6 +300,41 @@ func (s *AIService) conversationContext(session entities.ChatSession, currentUse
 	return chat
 }
 
+// SuggestFollowUps composes follow-up question suggestions for an existing
+// session. It is deliberately trigger-driven — the frontend only calls it when
+// the user taps "Suggest follow-up questions" — so no tokens are spent
+// automatically after an answer. It builds on the completed conversation only:
+// an empty transcript returns an empty list without calling the model. Provider
+// and session lookup errors are returned for the handler to map to typed codes.
+func (s *AIService) SuggestFollowUps(ctx context.Context, userID *uuid.UUID, sessionID uuid.UUID) ([]string, error) {
+	session, err := s.sessions.Get(sessionID)
+	if err != nil {
+		return nil, ErrSessionNotFound
+	}
+	if session.UserID != nil && (userID == nil || *session.UserID != *userID) {
+		return nil, ErrSessionForbidden
+	}
+	chat := s.conversationContext(session, uuid.Nil)
+	if len(chat) == 0 {
+		return []string{}, nil
+	}
+	var transcript strings.Builder
+	for _, entry := range chat {
+		who := "User"
+		if entry.Role == "assistant" {
+			who = "Assistant"
+		}
+		transcript.WriteString(who + ": " + trimRunes(entry.Content, 500) + "\n")
+	}
+	system := `You are a research assistant. Based on this conversation, suggest follow-up questions the user is likely to ask next. Return ONLY a JSON array of 3 strings with concise, self-contained questions the user can send as-is, for example ["question one", "question two", "question three"]. No markdown, no numbering, no commentary.`
+	userPrompt := "Conversation:\n" + transcript.String() + "Suggest 3 follow-up questions."
+	generated, err := s.llm.Generate(ctx, system, []ChatMessage{{Role: "user", Content: userPrompt}}, GenerateOptions{Temperature: 0.4, MaxTokens: 160})
+	if err != nil {
+		return nil, err
+	}
+	return parseSuggestions(generated.Content), nil
+}
+
 // collectFromSearch queries SearXNG (web + images), persists the source cards
 // and image results, and optionally deep-reads the top pages (only for
 // enhanced mode). Search failures degrade gracefully: the LLM still answers,

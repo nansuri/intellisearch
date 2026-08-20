@@ -506,6 +506,7 @@ watch(
 
         <section v-else-if="activeTab === 'ai'" class="ai-tab-content">
           <AISummaryTab
+            :session-id="sessionId || undefined"
             :thread="thread"
             :active-follow-up-id="activeFollowUpId"
             :can-follow-up="Boolean(sessionId)"

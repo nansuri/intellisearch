@@ -167,6 +167,11 @@ export const askUrl = async (url: string) => {
   return result
 }
 export const getSession = (id: string) => request<ChatSession>(`/sessions/${id}`)
+// Trigger-driven follow-up suggestions for a conversation (the AI Summary tab's
+// "Suggest follow-up questions" button). Not called automatically — it spends
+// tokens only when the user taps it.
+export const suggestFollowUps = (sessionId: string) =>
+  request<{ suggestions: string[] }>(`/sessions/${sessionId}/suggestions`, { method: 'POST', headers: visitorHeaders() })
 
 // Auth & account
 export const login = (email: string, password: string) => request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) })

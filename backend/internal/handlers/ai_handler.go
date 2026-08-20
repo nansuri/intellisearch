@@ -25,6 +25,9 @@ import (
 // satisfies it and tests substitute a fake.
 type aiRunner interface {
 	Answer(ctx context.Context, input services.AskInput) (services.AskResult, error)
+	// SuggestFollowUps is trigger-driven follow-up question composition for an
+	// existing session (runs only when the user asks for it — token-saving).
+	SuggestFollowUps(ctx context.Context, userID *uuid.UUID, sessionID uuid.UUID) ([]string, error)
 }
 
 // AIHandler is the single entry point for all AI work. It owns a worker pool
@@ -230,6 +233,53 @@ func (h *AIHandler) AskURL(c *gin.Context) {
 	result, err := h.enqueue(c.Request.Context(), services.AskInput{Query: "Summarize this page", URL: request.URL, UserID: userID, IP: c.ClientIP()}, 5, time.Hour)
 	h.settleAnonymousClaim(visitorID, err, &result)
 	h.respond(c, result, err)
+}
+
+// SessionSuggestions serves trigger-driven follow-up question suggestions for
+// an existing conversation (the AI Summary tab's "Suggest follow-up questions"
+// button). It is a lightweight, synchronous LLM call — not an ask-pipeline job —
+// so no tokens are spent automatically: the client only requests it on tap. The
+// suggestions endpoint is rate-limited more strictly than asks.
+func (h *AIHandler) SessionSuggestions(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		middleware.RespondError(c, http.StatusNotFound, contracts.SESS01001, "That conversation could not be found.", "parse session id", err)
+		return
+	}
+	userID, err := h.optionalUser(c)
+	if err != nil {
+		middleware.RespondError(c, http.StatusUnauthorized, contracts.AUTH01002, "Your session is invalid or has expired.", "unauthorized suggestions caller", err)
+		return
+	}
+	key := c.ClientIP()
+	if key == "" {
+		key = "anonymous"
+	}
+	if userID != nil {
+		key = userID.String()
+	}
+	allowed, err := h.limiter.Allow(c.Request.Context(), "suggest", key, 3, time.Minute)
+	if err != nil {
+		logrus.WithError(err).WithField("scope", "suggest").Error("rate limiter unavailable; allowing request")
+	} else if !allowed {
+		h.rejected.Add(1)
+		middleware.RespondError(c, http.StatusTooManyRequests, contracts.AISY02002, services.SanitizedErrorMessage(services.ErrRateLimited), "suggestions rate limited", services.ErrRateLimited)
+		return
+	}
+	suggestions, err := h.service.SuggestFollowUps(c.Request.Context(), userID, id)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrSessionNotFound):
+			middleware.RespondError(c, http.StatusNotFound, contracts.SESS01001, "That conversation could not be found.", "load session", err)
+		case errors.Is(err, services.ErrSessionForbidden):
+			middleware.RespondError(c, http.StatusForbidden, contracts.SESS01002, "You don't have access to that conversation.", "session access denied", err)
+		default:
+			code, status := h.errorResponse(err)
+			middleware.RespondError(c, status, code, services.SanitizedErrorMessage(err), "suggestions generation failed", err)
+		}
+		return
+	}
+	middleware.JSON(c, http.StatusOK, contracts.OK(gin.H{"suggestions": suggestions}))
 }
 
 // enqueue applies per-user rate limiting and the daily quota, then submits the
