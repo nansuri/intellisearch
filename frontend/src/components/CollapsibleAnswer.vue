@@ -234,16 +234,6 @@ function collapse() { emit('update:collapsed', true) }
 :deep(.web-results) { margin-top: 6px; }
 .collapsible-answer--compact { margin-top: 0; padding-bottom: 20px; }
 .collapsible-answer--compact.collapsible-answer--collapsed { margin-top: 0; }
-/* The results column is full panel width on wide monitors; cap paragraphs and
-   list items at a comfortable reading measure so text doesn't stretch across
-   an ultrawide screen, while tables, images and code still span the width. */
-@media (min-width: 1100px) {
-  :deep(.markdown > p),
-  :deep(.markdown li),
-  :deep(.markdown > blockquote) {
-    max-width: 76ch;
-  }
-}
 @keyframes answer-spotlight {
   0%, 12% { box-shadow: none; transform: scale(1); }
   22% {

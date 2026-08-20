@@ -28,17 +28,10 @@
 .header-center { width: min(760px, 100%); }
 .header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; grid-column: 3; }
 .result-page { padding-bottom: 0; }
-.result-content { width: min(760px, 100%); max-width: 100%; margin: 54px auto 100px; /* Prevent any child from creating a horizontal scrollbar on the whole result page. Wide elements inside (tables, mermaid diagrams, code) handle their own scrolling. */ overflow-x: hidden; }
+.result-content { width: min(1280px, 100%); max-width: 100%; margin: 54px auto 100px; /* The column is centered and its width matches the header (min(1280px, 100%)), so the content's left edge lines up with the brand title and the right edge with the avatar. Prevent any child from creating a horizontal scrollbar on the whole result page. Wide elements inside (tables, mermaid diagrams, code) handle their own scrolling. */ overflow-x: hidden; }
 .account-content { width: min(920px, 100%); margin: 64px auto 100px; }
 .persistent-ask { position: sticky; bottom: 0; z-index: 5; padding: 16px 0 20px; border-top: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent); background: color-mix(in srgb, var(--color-bg) 92%, transparent); backdrop-filter: blur(16px); }
 .persistent-ask > div { width: min(780px, 100%); margin: auto; }
-/* Wide monitors: the results expand to fill the whole panel width instead of
-   the centered 760px column, so big screens don't waste space. Headings,
-   source cards, images and code use the extra width; paragraphs keep a
-   comfortable measure (see CollapsibleAnswer) so lines stay readable. */
-@media (min-width: 1100px) {
-  .result-content { width: 100%; max-width: none; }
-}
 @media (max-width: 850px) {
   /* All three columns must be explicit: .header-actions lives in column 3, so a
      two-column grid pushes it into an implicit track that grid-column: 1 / -1
