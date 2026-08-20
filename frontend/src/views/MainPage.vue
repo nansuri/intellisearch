@@ -120,22 +120,16 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* On tall screens the panel is anchored to the hero's bottom edge instead of
-   participating in the flex centering, so loading "Suggested for you" never
-   pushes the title/ask box off-center (max-height + scroll keeps it clear of
-   the centered box). On short screens that anchoring would overlap the ask
-   box, so the panel flows in the document below it instead and the page
-   scrolls naturally. */
+/* The panel is part of the centered column (in normal flow after the ask box),
+   so it can never float over the "Ask AI" button or the title. A max-height +
+   internal scroll keeps a long "Recent searches"/"Suggested for you" stack from
+   dominating the hero; the body just centers the whole group. */
 .history-panel {
-  position: absolute;
-  inset-inline: 0;
-  bottom: max(16px, env(safe-area-inset-bottom));
   display: grid;
   gap: 16px;
-  width: 100%;
-  max-width: 720px;
-  max-height: 42%;
-  margin: 0 auto;
+  width: min(720px, 100%);
+  max-height: 40%;
+  margin: 30px auto 0;
   overflow-y: auto;
   text-align: left;
 }
@@ -144,13 +138,7 @@ onMounted(() => {
 .history-refresh { margin-left: 6px; padding: 0 4px; border: 0; background: transparent; color: var(--color-muted); cursor: pointer; font-size: .85rem; }
 .history-refresh:hover { color: var(--color-primary); }
 .history-note { margin: 0; color: var(--color-muted); font-size: .78rem; }
-@media (max-width: 520px), (max-height: 560px) {
-  .history-panel {
-    position: static;
-    width: 100%;
-    max-height: none;
-    margin: 26px 0 0;
-    overflow: visible;
-  }
+@media (max-width: 520px) {
+  .history-panel { margin-top: 26px; }
 }
 </style>
