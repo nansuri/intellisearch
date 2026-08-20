@@ -15,7 +15,6 @@ const props = withDefaults(defineProps<{
   highlighted?: boolean
   showSources?: boolean
   compact?: boolean
-  actionLabel?: string
   emptyLabel?: string
   mapCenter?: MapPoint | null
   mapMarkers?: MapPoint[]
@@ -26,7 +25,6 @@ const props = withDefaults(defineProps<{
   highlighted: false,
   showSources: true,
   compact: false,
-  actionLabel: 'Read full summary',
   emptyLabel: 'No answer yet. Try asking again.',
   mapCenter: null,
   mapMarkers: () => [],
@@ -53,29 +51,24 @@ function collapse() { emit('update:collapsed', true) }
     <button
       v-if="collapsed && canCollapse"
       type="button"
-      class="collapsed-chip"
+      class="collapse-bar"
       :aria-expanded="false"
       @click="expand"
     >
-      <span class="collapsed-chip-head">
-        <span class="collapsed-chip-label">
-          <svg class="collapsed-chip-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-            <path d="M12 2.4l1.9 5.2 5.2 1.9-5.2 1.9L12 16.6l-1.9-5.2-5.2-1.9 5.2-1.9z" fill="currentColor" />
-            <path d="M19.5 14.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" fill="currentColor" />
-          </svg>
-          {{ label }}
-        </span>
-        <span v-if="sources.length" class="collapsed-chip-count">{{ sources.length }} result{{ sources.length === 1 ? '' : 's' }}</span>
+      <span class="collapse-bar-label">
+        <svg class="collapse-bar-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+          <path d="M12 2.4l1.9 5.2 5.2 1.9-5.2 1.9L12 16.6l-1.9-5.2-5.2-1.9 5.2-1.9z" fill="currentColor" />
+          <path d="M19.5 14.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" fill="currentColor" />
+        </svg>
+        {{ label }}
       </span>
-      <p class="collapsed-chip-preview">{{ preview }}</p>
-      <span class="collapsed-chip-meta">
-        <span class="collapsed-chip-hint">Just a taste — dive in for the full picture</span>
-        <span class="collapsed-chip-action">
-          {{ actionLabel }}
-          <svg class="collapsed-chip-arrow" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-            <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-        </span>
+      <span class="collapse-bar-preview">{{ preview }}</span>
+      <span v-if="sources.length" class="collapse-bar-count">{{ sources.length }} result{{ sources.length === 1 ? '' : 's' }}</span>
+      <span class="collapse-bar-action">
+        Show summary
+        <svg class="collapse-bar-arrow" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+          <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
       </span>
     </button>
 
@@ -141,102 +134,79 @@ function collapse() { emit('update:collapsed', true) }
   transition: border-color .14s ease, color .14s ease;
 }
 .collapse-toggle:hover { border-color: var(--color-primary); color: var(--color-primary); }
-.collapsed-chip {
-  position: relative;
-  overflow: hidden;
-  display: grid;
-  gap: 12px;
+.collapse-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
   width: 100%;
-  padding: 18px 20px 16px;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 18%, var(--color-border));
-  border-radius: 18px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 6%, var(--color-surface)), var(--color-surface) 34%);
-  box-shadow: 0 6px 20px var(--color-shadow);
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 10px var(--color-shadow);
   color: inherit;
   cursor: pointer;
   text-align: left;
-  transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+  transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease;
 }
-/* Soft gradient hairline across the top, Google AI Overview style. */
-.collapsed-chip::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 18px;
-  right: 18px;
-  height: 2px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, transparent, var(--color-primary), transparent);
-  opacity: .55;
-}
-.collapsed-chip:hover {
-  border-color: color-mix(in srgb, var(--color-primary) 34%, var(--color-border));
+.collapse-bar:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
   transform: translateY(-1px);
-  box-shadow: 0 10px 28px var(--color-shadow);
+  box-shadow: 0 6px 16px var(--color-shadow);
 }
-.collapsed-chip-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.collapsed-chip-label {
+.collapse-bar-label {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
+  flex: 0 0 auto;
   color: var(--color-primary);
-  font-size: .68rem;
+  font-size: .66rem;
   font-weight: 760;
   letter-spacing: .09em;
   text-transform: uppercase;
 }
-.collapsed-chip-icon { flex: 0 0 auto; }
-.collapsed-chip-count {
+.collapse-bar-icon { flex: 0 0 auto; }
+.collapse-bar-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-muted);
+  font-size: .82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.collapse-bar-count {
   flex: 0 0 auto;
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-primary) 9%, var(--color-surface));
-  color: var(--color-primary);
-  font-size: .7rem;
+  background: var(--color-surface-subtle);
+  color: var(--color-muted);
+  font-size: .68rem;
   font-weight: 680;
   white-space: nowrap;
 }
-.collapsed-chip-preview {
-  margin: 0;
-  color: var(--color-text);
-  font-size: .92rem;
-  line-height: 1.6;
-}
-.collapsed-chip-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  margin-top: 2px;
-  padding-top: 12px;
-  border-top: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
-}
-.collapsed-chip-hint { color: var(--color-muted); font-size: .73rem; }
-.collapsed-chip-action {
+.collapse-bar-action {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  border: 0;
-  padding: 0;
-  background: transparent;
+  gap: 5px;
+  flex: 0 0 auto;
   color: var(--color-primary);
-  font-size: .78rem;
+  font-size: .76rem;
   font-weight: 700;
   white-space: nowrap;
   transition: color .16s ease;
 }
-.collapsed-chip:hover .collapsed-chip-action { color: var(--color-primary-hover); }
-.collapsed-chip-arrow { transition: transform .16s ease; }
-.collapsed-chip:hover .collapsed-chip-arrow { transform: translateX(3px); }
+.collapse-bar:hover .collapse-bar-action { color: var(--color-primary-hover); }
+.collapse-bar-arrow { transition: transform .16s ease; }
+.collapse-bar:hover .collapse-bar-arrow { transform: translateX(3px); }
 .sources--nested { margin-top: 0; }
 :deep(.web-results) { margin-top: 6px; }
 .collapsible-answer--compact { margin-top: 0; padding-bottom: 20px; }
 .collapsible-answer--compact.collapsible-answer--collapsed { margin-top: 0; }
+@media (max-width: 560px) {
+  .collapse-bar-preview { display: none; }
+}
 @keyframes answer-spotlight {
   0%, 12% { box-shadow: none; transform: scale(1); }
   22% {

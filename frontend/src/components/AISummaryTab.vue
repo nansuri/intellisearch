@@ -1,29 +1,19 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import CollapsibleAnswer from './CollapsibleAnswer.vue'
 import FollowUpBlock, { type FollowUpEntry } from './FollowUpBlock.vue'
-import type { MapPoint, Source } from '../services/api'
 
-// Dedicated "AI Summary" tab: the AI overview envelope plus the follow-up
-// conversation (composer + thread). The parent owns the data and the follow-up
-// API call; this component only presents it and emits user intent.
+// "AI Summary" tab hosts the follow-up conversation only. The initial AI
+// overview lives in the All tab (CollapsibleAnswer), so a summary never
+// appears twice. The parent owns the follow-up API call; this component only
+// presents the conversation and emits user intent.
 const props = withDefaults(
   defineProps<{
-    answer: string
-    sources?: Source[]
-    mapCenter?: MapPoint | null
-    mapMarkers?: MapPoint[]
-    collapsed?: boolean
     thread?: FollowUpEntry[]
     activeFollowUpId?: number | null
     canFollowUp?: boolean
     searchOnly?: boolean
   }>(),
   {
-    sources: () => [],
-    mapCenter: null,
-    mapMarkers: () => [],
-    collapsed: false,
     thread: () => [],
     activeFollowUpId: null,
     canFollowUp: true,
@@ -32,7 +22,6 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  'update:collapsed': [value: boolean]
   'update:collapsed-followup': [id: number, value: boolean]
   'follow-up': [question: string]
 }>()
@@ -53,21 +42,10 @@ function send() {
 
 <template>
   <section class="ai-summary-tab">
-    <CollapsibleAnswer
-      :label="searchOnly ? 'Summary from top results' : 'AI overview'"
-      :answer="answer"
-      :sources="sources"
-      :collapsed="collapsed"
-      :map-center="mapCenter"
-      :map-markers="mapMarkers"
-      :show-sources="false"
-      @update:collapsed="emit('update:collapsed', $event)"
-    />
-
     <div class="follow-up-panel">
       <div class="follow-up-heading">
-        <h2 class="follow-up-title">Keep digging</h2>
-        <p class="follow-up-subtitle">Ask a follow-up below and the AI keeps building on this conversation.</p>
+        <h2 class="follow-up-title">AI Summary</h2>
+        <p class="follow-up-subtitle">Continue this conversation — ask a follow-up and each answer is built on what came before.</p>
       </div>
 
       <form class="follow-up-composer" @submit.prevent="send">
@@ -111,7 +89,7 @@ function send() {
   padding-top: 6px;
 }
 
-.follow-up-panel { margin-top: 52px; }
+.follow-up-panel { margin-top: 18px; }
 .follow-up-heading { margin-bottom: 14px; }
 .follow-up-title {
   margin: 0;

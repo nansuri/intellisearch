@@ -212,9 +212,9 @@ async function runInitial() {
     mapMarkers.value = result.mapMarkers || []
     sessionId.value = result.sessionId
     elapsed.value = Math.round((performance.now() - startedAt) / 100) / 10
-    // AI overview ships collapsed ("envelope") by default so the highlighted
-    // web results are the first thing people see; click to expand the summary.
-    primaryCollapsed.value = true
+    // The AI overview sits at the top of the All tab, expanded and collapsible;
+    // follow-ups accumulate under the AI Summary tab.
+    primaryCollapsed.value = false
     persistState()
   } catch (cause) {
     guestLimitReached.value = isGuestLimit(cause)
@@ -311,7 +311,7 @@ async function submitUrl(url: string) {
     mapMarkers.value = result.mapMarkers || []
     sessionId.value = result.sessionId
     error.value = null
-    primaryCollapsed.value = true
+    primaryCollapsed.value = false
     persistState()
   } catch (cause) {
     if (isGuestLimit(cause)) {
@@ -426,6 +426,18 @@ watch(
 
         <template v-if="activeTab === 'all'">
           <template v-if="mode === 'enhanced'">
+            <CollapsibleAnswer
+              label="AI overview"
+              :answer="answer"
+              :sources="sources"
+              :query="query"
+              :collapsed="primaryCollapsed"
+              :map-center="mapCenter"
+              :map-markers="mapMarkers"
+              :show-sources="false"
+              class="ai-overview"
+              @update:collapsed="(value) => { primaryCollapsed = value; persistState() }"
+            />
             <section v-if="sources.length" class="web-search-section" aria-label="Web search results">
               <div class="web-search-head">
                 <h2 class="web-search-title">
@@ -494,16 +506,10 @@ watch(
 
         <section v-else-if="activeTab === 'ai'" class="ai-tab-content">
           <AISummaryTab
-            :answer="answer"
-            :sources="sources"
-            :map-center="mapCenter"
-            :map-markers="mapMarkers"
-            :collapsed="primaryCollapsed"
             :thread="thread"
             :active-follow-up-id="activeFollowUpId"
             :can-follow-up="Boolean(sessionId)"
             :search-only="mode === 'search'"
-            @update:collapsed="(value) => { primaryCollapsed = value; persistState() }"
             @update:collapsed-followup="setFollowUpCollapsed"
             @follow-up="followUp"
           />
@@ -519,9 +525,14 @@ watch(
 
 <style scoped>
 .search-results-only { min-width: 0; margin-top: 38px; padding: 0 0 28px; border-bottom: 1px solid var(--color-border); }
+/* The AI overview's bottom border is dropped so the separator above the web
+   search comes from a single border line. */
+.ai-overview.collapsible-answer:not(.collapsible-answer--collapsed) { border-bottom: 0; padding-bottom: 0; }
 .web-search-section {
   min-width: 0;
-  margin-top: 8px;
+  margin-top: 30px;
+  padding-top: 26px;
+  border-top: 1px solid var(--color-border);
 }
 .web-search-head {
   display: flex;

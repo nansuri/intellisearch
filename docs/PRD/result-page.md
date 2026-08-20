@@ -9,9 +9,9 @@ The main use case of the platform — the app behaves like **AI-as-searchable-it
 - **Header (persistent):** site name/logo, a compact ask box (Google-results style, always starts a **new search**), and the top-right avatar/account button.
 - **Result body (below the header):**
   1. **Query header** — the question, source count, and timing (e.g., "About 12 sources · 1.2s").
-  2. **Result tabs** — **All** (web sources), **AI Summary** (AI overview + follow-up conversation), **Images** (when the search returned images). Defaults to **All** so the web results are the first thing shown.
-  3. **All tab → Web sources list** — numbered result cards, each with favicon, domain, title, snippet, and full URL; clicking opens the page in a new tab. Ordered by relevance; each card maps to its citation number in the summary.
-  4. **AI Summary tab** — the AI answer behind a Google AI Overview-style **envelope**: a soft, tinted card that shows a preview and a "Read full summary" action; tapping expands the full cited answer inline. Below it is the **follow-up panel** with a composer and the follow-up thread.
+  2. **Result tabs** — **All** (AI overview + web sources), **AI Summary** (the follow-up conversation), **Images** (when the search returned images). Defaults to **All**.
+  3. **All tab → AI overview** — at the top, a plain **collapsible** summary (expanded by default; "Hide summary"/"Show summary" toggle with a one-line preview when collapsed). Below it the **Web sources list** — numbered result cards, each with favicon, domain, title, snippet, and full URL; clicking opens the page in a new tab. Ordered by relevance; each card maps to its citation number in the summary. A border separates the AI overview from the web sources.
+  4. **AI Summary tab** — the **follow-up conversation only** (the initial AI overview is not duplicated here): a composer plus the follow-up thread, each follow-up with its own summary.
 - **Loading state:** animated research mascot while scraping; the summary card and source cards appear progressively as each completes.
 - **Search backend:** source listings come from a self-hosted **SearXNG** metasearch container on the same server, called backend-to-backend; the crawler fetches the top sources' page content so the summary is grounded in full text, not just snippets.
 
