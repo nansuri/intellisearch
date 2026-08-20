@@ -68,8 +68,11 @@ func main() {
 	translateService := services.NewTranslateService(cfg.LibreTranslateBaseURL)
 	appsHandler := handlers.NewAppsHandler(noteService, translateService, limiter)
 	pollinationsHandler := handlers.NewPollinationsHandler(adminService, services.NewPollinationsService(cfg.PollinationsMediaBaseURL))
+	miniAppService := services.NewMiniAppService(repositories.NewMiniAppRepository(db))
+	apiDocsService := services.NewApiDocsService(repositories.NewApiDocRepository(db))
+	miniAppsHandler := handlers.NewMiniAppsHandler(miniAppService, apiDocsService, aiHandler, authService)
 
-	api := router.New(cfg.CORSOrigins, cfg.UploadsDir, siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService, historyService), sessionHandler, aiHandler, adminHandler, appsHandler, pollinationsHandler, visitorHandler, authService)
+	api := router.New(cfg.CORSOrigins, cfg.UploadsDir, siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService, historyService), sessionHandler, aiHandler, adminHandler, appsHandler, pollinationsHandler, visitorHandler, miniAppsHandler, authService)
 	// Only the configured proxies may supply X-Forwarded-For; everything else is
 	// ignored so clients cannot spoof the client IP used for the anonymous
 	// per-IP AI allowance and rate limiting.

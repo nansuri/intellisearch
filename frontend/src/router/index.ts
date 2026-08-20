@@ -8,6 +8,9 @@ import NotesView from '../views/NotesView.vue'
 import TranslatorView from '../views/TranslatorView.vue'
 import AuthView from '../views/AuthView.vue'
 import AuthCallback from '../views/AuthCallback.vue'
+import MiniAppRunnerView from '../views/MiniAppRunnerView.vue'
+import MiniAppsStudioView from '../views/MiniAppsStudioView.vue'
+import MiniAppIdeView from '../views/MiniAppIdeView.vue'
 
 const ControlPanel = () => import('../views/admin/ControlPanel.vue')
 
@@ -18,6 +21,12 @@ const routes = [
   { path: '/history', component: HistoryView, meta: { requiresAuth: true } },
   { path: '/notes', component: NotesView, meta: { requiresAuth: true } },
   { path: '/translator', component: TranslatorView, meta: { requiresAuth: true } },
+  // Mini app studio: workspace list, the IDE (new or existing by id), and the
+  // public runner (any visitor can open a published app by slug).
+  { path: '/apps', component: MiniAppsStudioView, meta: { requiresAuth: true } },
+  { path: '/apps/new', component: MiniAppIdeView, meta: { requiresAuth: true } },
+  { path: '/apps/:id', component: MiniAppIdeView, meta: { requiresAuth: true } },
+  { path: '/app/:slug', component: MiniAppRunnerView },
   { path: '/login', component: AuthView, meta: { publicAuth: true } },
   { path: '/register', redirect: () => '/login?mode=register' },
   // Login is unified for every account type; keep the old admin path redirecting

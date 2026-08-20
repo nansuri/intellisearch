@@ -151,3 +151,27 @@ const STTS01001 = "STTS01001"
 
 // STTS01002 indicates that a register-page visit could not be recorded.
 const STTS01002 = "STTS01002"
+
+// MINI01001 indicates the user's mini apps could not be loaded.
+const MINI01001 = "MINI01001"
+
+// MINI01002 indicates invalid mini-app data (missing name/source or over the caps).
+const MINI01002 = "MINI01002"
+
+// MINI01003 indicates a requested mini app was not found.
+const MINI01003 = "MINI01003"
+
+// MINI01004 indicates a mini app could not be deleted.
+const MINI01004 = "MINI01004"
+
+// MINI01005 indicates that the mini app's name/slug is already taken.
+const MINI01005 = "MINI01005"
+
+// MINI02001 indicates the AI could not produce a valid mini-app draft.
+const MINI02001 = "MINI02001"
+
+// MINI03001 indicates that a mini app is private and the caller does not own it.
+const MINI03001 = "MINI03001"
+
+// MINI03002 indicates the Mini Apps API documentation could not be loaded.
+const MINI03002 = "MINI03002"

@@ -62,6 +62,14 @@ func (r *fakeRunner) SuggestFollowUps(ctx context.Context, userID *uuid.UUID, se
 	return []string{"q1", "q2", "q3"}, nil
 }
 
+func (r *fakeRunner) GenerateMiniApp(ctx context.Context, userID uuid.UUID, prompt string) (services.MiniAppDraft, error) {
+	r.calls.Add(1)
+	if r.err != nil {
+		return services.MiniAppDraft{}, r.err
+	}
+	return services.MiniAppDraft{Name: "Fake app", HTML: "<h1>Fake</h1>"}, nil
+}
+
 func handlerTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(fmt.Sprintf("file:ai-handler-%d?mode=memory&cache=shared", time.Now().UnixNano())), &gorm.Config{})

@@ -28,6 +28,9 @@ type aiRunner interface {
 	// SuggestFollowUps is trigger-driven follow-up question composition for an
 	// existing session (runs only when the user asks for it — token-saving).
 	SuggestFollowUps(ctx context.Context, userID *uuid.UUID, sessionID uuid.UUID) ([]string, error)
+	// GenerateMiniApp composes a complete mini app (HTML/CSS/JS) from a prompt,
+	// attributed to the user so generation counts against their daily quota.
+	GenerateMiniApp(ctx context.Context, userID uuid.UUID, prompt string) (services.MiniAppDraft, error)
 }
 
 // AIHandler is the single entry point for all AI work. It owns a worker pool
@@ -60,16 +63,19 @@ type AIHandler struct {
 	cfgAt     time.Time
 }
 
+// job is one unit of AI work on the bounded queue. run is a closure capturing
+// the pipeline inputs so one generic queue can serve asks, URL asks, and
+// mini-app generation through the same worker pool.
 type job struct {
 	ctx     context.Context
-	input   services.AskInput
 	timeout time.Duration
+	run     func(ctx context.Context) (any, error)
 	resp    chan jobResult
 }
 
 type jobResult struct {
-	result services.AskResult
-	err    error
+	value any
+	err   error
 }
 
 func NewAIHandler(service aiRunner, queueCfg *repositories.QueueConfigRepository, users *repositories.UserRepository, usageLogs *repositories.UsageLogRepository, anonymous *repositories.AnonymousUsageRepository, limiter services.Limiter, auth *services.AuthService) *AIHandler {
@@ -125,9 +131,9 @@ func (h *AIHandler) worker() {
 		case current := <-h.jobs:
 			h.inflight.Add(1)
 			ctx, cancel := context.WithTimeout(current.ctx, current.timeout)
-			result, err := h.service.Answer(ctx, current.input)
+			value, err := current.run(ctx)
 			cancel()
-			current.resp <- jobResult{result: result, err: err}
+			current.resp <- jobResult{value: value, err: err}
 			h.inflight.Add(-1)
 		}
 	}
@@ -283,7 +289,9 @@ func (h *AIHandler) SessionSuggestions(c *gin.Context) {
 }
 
 // enqueue applies per-user rate limiting and the daily quota, then submits the
-// job to the bounded queue. Overflow is rejected with the friendly busy error.
+// ask job to the bounded queue. Overflow is rejected with the friendly busy
+// error. It wraps enqueueJob so asks and mini-app generation share the same
+// rate-limit/quota/queue gate.
 func (h *AIHandler) enqueue(ctx context.Context, input services.AskInput, limitMax int, window time.Duration) (services.AskResult, error) {
 	if services.SanitizeQuery(input.Query) == "" {
 		return services.AskResult{}, services.ErrInvalidQuery
@@ -292,36 +300,62 @@ func (h *AIHandler) enqueue(ctx context.Context, input services.AskInput, limitM
 	if key == "" {
 		key = "anonymous"
 	}
-	allowed, err := h.limiter.Allow(ctx, "ask", key, limitMax, window)
+	value, err := h.enqueueJob(ctx, key, limitMax, window, input.UserID, func(c context.Context) (any, error) {
+		return h.service.Answer(c, input)
+	})
+	if err != nil {
+		return services.AskResult{}, err
+	}
+	return value.(services.AskResult), nil
+}
+
+// GenerateMiniApp runs an AI mini-app generation job through the same pool,
+// queue, rate limit, and daily quota gate as asks. Generation is signed-in
+// only (a quota is useless to anonymous callers), so the user id is required.
+func (h *AIHandler) GenerateMiniApp(ctx context.Context, userID uuid.UUID, prompt string) (services.MiniAppDraft, error) {
+	value, err := h.enqueueJob(ctx, userID.String(), 5, time.Minute, &userID, func(c context.Context) (any, error) {
+		return h.service.GenerateMiniApp(c, userID, prompt)
+	})
+	if err != nil {
+		return services.MiniAppDraft{}, err
+	}
+	return value.(services.MiniAppDraft), nil
+}
+
+// enqueueJob is the shared gate for every AI job type: Redis sliding-window
+// rate limit, the user's daily question quota, and the bounded queue. The run
+// closure carries the actual pipeline work.
+func (h *AIHandler) enqueueJob(ctx context.Context, rlKey string, limitMax int, window time.Duration, userID *uuid.UUID, run func(ctx context.Context) (any, error)) (any, error) {
+	allowed, err := h.limiter.Allow(ctx, "ask", rlKey, limitMax, window)
 	if err != nil {
 		logrus.WithError(err).WithField("scope", "ask").Error("rate limiter unavailable; allowing request")
 	} else if !allowed {
 		h.rejected.Add(1)
-		return services.AskResult{}, services.ErrRateLimited
+		return nil, services.ErrRateLimited
 	}
-	if input.UserID != nil {
-		if err := h.checkDailyQuota(ctx, *input.UserID); err != nil {
-			return services.AskResult{}, err
+	if userID != nil {
+		if err := h.checkDailyQuota(ctx, *userID); err != nil {
+			return nil, err
 		}
 	}
 	config, _ := h.currentConfig()
 	if len(h.jobs) >= config.MaxQueueSize {
 		h.rejected.Add(1)
-		return services.AskResult{}, services.ErrQueueFull
+		return nil, services.ErrQueueFull
 	}
 	h.ensureWorkers(config.MaxConcurrent)
-	current := job{ctx: ctx, input: input, timeout: time.Duration(config.RequestTimeoutMS) * time.Millisecond, resp: make(chan jobResult, 1)}
+	current := job{ctx: ctx, timeout: time.Duration(config.RequestTimeoutMS) * time.Millisecond, run: run, resp: make(chan jobResult, 1)}
 	select {
 	case h.jobs <- current:
 	default:
 		h.rejected.Add(1)
-		return services.AskResult{}, services.ErrQueueFull
+		return nil, services.ErrQueueFull
 	}
 	select {
 	case done := <-current.resp:
-		return done.result, done.err
+		return done.value, done.err
 	case <-ctx.Done():
-		return services.AskResult{}, ctx.Err()
+		return nil, ctx.Err()
 	}
 }
 
@@ -450,7 +484,7 @@ func (h *AIHandler) errorResponse(err error) (string, int) {
 		return code, http.StatusForbidden
 	case "AISY01002":
 		return code, http.StatusGatewayTimeout
-	case "AISY01003", "AISY03004":
+	case "AISY01003", "AISY03004", "MINI02001":
 		return code, http.StatusBadGateway
 	case "AISY01001":
 		return code, http.StatusServiceUnavailable

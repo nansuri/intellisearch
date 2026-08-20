@@ -244,3 +244,53 @@ type CrawlJob struct {
 	CreatedAt  time.Time  `json:"createdAt"`
 	FinishedAt *time.Time `json:"finishedAt,omitempty"`
 }
+
+const (
+	// MiniAppVisibilityPublic means any visitor can open and run the app.
+	MiniAppVisibilityPublic = "public"
+	// MiniAppVisibilityPrivate means only the owning user can open and run it.
+	MiniAppVisibilityPrivate = "private"
+)
+
+// MiniApp is a user-created mini app. Its entire source (HTML + CSS + JS) is
+// stored in the database — never in the frontend or on disk — so every app is
+// portable, backup-friendly, and versioned with the rest of the row. The
+// platform renders the source inside a sandboxed, same-origin iframe; the app
+// code can call the platform API (including the AI /ask pipeline and its
+// existing quotas/rate limits) because sandboxed srcdoc iframes inherit the
+// parent origin and share its localStorage session.
+type MiniApp struct {
+	ID          uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+	UserID      uuid.UUID `gorm:"type:uuid;not null;index:idx_mini_apps_user,priority:1" json:"userId"`
+	Name        string    `gorm:"not null" json:"name"`
+	// Slug is the URL-safe identifier used to run the app at /api/v1/mini-apps/:slug.
+	// It is globally unique so public apps have stable, shareable links.
+	Slug        string    `gorm:"uniqueIndex;not null" json:"slug"`
+	Description string    `gorm:"type:text" json:"description"`
+	// Icon is a short emoji / character shown in the app drawer and cards.
+	Icon       string `gorm:"type:varchar(16)" json:"icon"`
+	HTML       string `gorm:"type:text;not null" json:"html"`
+	CSS        string `gorm:"type:text;not null" json:"css"`
+	JS         string `gorm:"type:text;not null" json:"js"`
+	Visibility string `gorm:"not null;default:private" json:"visibility"`
+	IsActive   bool   `gorm:"not null;default:true" json:"isActive"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+}
+
+// MiniAppApiDoc is a seeded row of the Mini Apps platform API reference. The
+// documentation lives in the database — never hardcoded in frontend code — so
+// the Studio can render the API list and export the AI API reference as
+// markdown without a code deploy. Rows are grouped by Section and ordered by
+// SortOrder; Markdown carries the copy (and code samples) for each entry.
+type MiniAppApiDoc struct {
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	Section   string `gorm:"not null;index" json:"section"`
+	Title     string `gorm:"not null" json:"title"`
+	// Method/Path describe the HTTP endpoint the entry documents ("" for a
+	// section intro or a non-endpoint note like the auth model).
+	Method    string `gorm:"type:varchar(12)" json:"method,omitempty"`
+	Path      string `gorm:"type:text" json:"path,omitempty"`
+	Markdown  string `gorm:"type:text;not null" json:"markdown"`
+	SortOrder int    `gorm:"not null;default:0" json:"sortOrder"`
+}

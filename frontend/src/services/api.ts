@@ -23,6 +23,12 @@ export const FRIENDLY_ERRORS: Record<string, string> = {
   NOTE01002: 'That note could not be saved.',
   NOTE01003: 'That note no longer exists.',
   NOTE01004: 'That note could not be deleted.',
+  MINI01001: 'Your mini apps could not be loaded.',
+  MINI01002: 'That mini app is not valid — check the name and the size of the code.',
+  MINI01003: 'That mini app no longer exists.',
+  MINI01005: 'That app name is already taken — try a different one.',
+  MINI03001: 'That mini app is private — only its owner can open it.',
+  MINI03002: 'The API documentation could not be loaded.',
   TRAN01001: 'The translator is temporarily unavailable — please try again.',
   TRAN01002: 'Enter text to translate and choose a target language.',
   TRAN01003: "You're translating too quickly — slow down and try again.",
@@ -197,6 +203,55 @@ export const deleteNote = (id: string) => request<{ deleted: boolean }>(`/me/not
 // Mini apps — translator (proxied server-side to LibreTranslate)
 export const getTranslateLanguages = () => request<{ languages: TranslateLanguage[] }>('/translate/languages')
 export const translate = (input: { q: string; source: string; target: string; format?: string }) => request<TranslateResult>('/translate', { method: 'POST', body: JSON.stringify(input) })
+
+// Mini apps — studio & gallery
+export type MiniAppVisibility = 'public' | 'private'
+export type MiniApp = {
+  id: string
+  userId: string
+  name: string
+  slug: string
+  description: string
+  icon: string
+  html: string
+  css: string
+  js: string
+  visibility: MiniAppVisibility
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+// Launcher items are source-free so the gallery never leaks app code.
+export type MiniAppSummary = { id: string; slug: string; name: string; description: string; icon: string; visibility: MiniAppVisibility; isActive: boolean; updatedAt: string }
+export type MiniAppInput = { name: string; description?: string; icon?: string; html: string; css: string; js: string; visibility: MiniAppVisibility }
+export type MiniAppPatch = Partial<MiniAppInput>
+// The DB-stored API reference that powers the Studio's API list.
+export type ApiDocEntry = { title: string; method?: string; path?: string; markdown: string }
+export type ApiDocSection = { section: string; entries: ApiDocEntry[] }
+
+export const listPublicMiniApps = () => request<{ items: MiniAppSummary[] }>('/mini-apps')
+export const getPublicMiniApp = (slug: string) => request<MiniApp>(`/mini-apps/${encodeURIComponent(slug)}`)
+export const getApiDocSections = () => request<{ sections: ApiDocSection[] }>('/mini-apps/api-docs')
+// The API reference as a whole markdown document (raw content-type, so it needs
+// a direct fetch — this is the "download the AI API as markdown" export).
+export async function downloadApiDocMarkdown(): Promise<{ text: string; filename: string }> {
+  const token = localStorage.getItem('token')
+  const response = await fetch(`${base}/mini-apps/api-docs/ai.md`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  if (!response.ok) throw new Error('The API documentation could not be downloaded.')
+  const text = await response.text()
+  const disposition = response.headers.get('Content-Disposition') || ''
+  const match = /filename="?([^";]+)"?/.exec(disposition)
+  return { text, filename: match?.[1] || 'mini-apps-api.md' }
+}
+export const listMyMiniApps = () => request<{ items: MiniApp[] }>('/me/mini-apps')
+export const createMiniApp = (input: MiniAppInput) => request<MiniApp>('/me/mini-apps', { method: 'POST', body: JSON.stringify(input) })
+export const getMyMiniApp = (id: string) => request<MiniApp>(`/me/mini-apps/${id}`)
+export const updateMiniApp = (id: string, input: MiniAppPatch) => request<MiniApp>(`/me/mini-apps/${id}`, { method: 'PATCH', body: JSON.stringify(input) })
+export const deleteMiniApp = (id: string) => request<{ deleted: boolean }>(`/me/mini-apps/${id}`, { method: 'DELETE' })
+// AI-generated mini app from a one-line prompt (through the shared AI handler:
+// worker pool, queue, rate limits, daily quota). The draft is persisted as a
+// private app the Studio can open, refine, and publish.
+export const generateMiniApp = (prompt: string) => request<MiniApp>('/me/mini-apps/generate', { method: 'POST', body: JSON.stringify({ prompt }) })
 
 // Admin — users
 export const listUsers = (q: string, page: number, pageSize = 20) => request<UsersPage>(`/admin/users?q=${encodeURIComponent(q)}&page=${page}&page_size=${pageSize}`)

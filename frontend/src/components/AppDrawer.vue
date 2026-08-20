@@ -8,6 +8,7 @@ const open = ref(false)
 const root = ref<HTMLElement | null>(null)
 
 const apps = [
+  { to: '/apps', label: 'Mini Apps Studio', desc: 'Build and publish mini apps', icon: 'dashboard' },
   { to: '/notes', label: 'Notes', desc: 'Save and organize summaries', icon: 'note' },
   { to: '/translator', label: 'Translator', desc: 'Google-style translate', icon: 'translate' },
 ]

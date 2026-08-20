@@ -37,6 +37,9 @@ func (fakeRunner) Answer(ctx context.Context, input services.AskInput) (services
 func (fakeRunner) SuggestFollowUps(ctx context.Context, userID *uuid.UUID, sessionID uuid.UUID) ([]string, error) {
 	return nil, nil
 }
+func (fakeRunner) GenerateMiniApp(ctx context.Context, userID uuid.UUID, prompt string) (services.MiniAppDraft, error) {
+	return services.MiniAppDraft{Name: "Fake app", HTML: "<h1>Fake</h1>"}, nil
+}
 
 func adminTestMux(t *testing.T) (*httptest.Server, *gorm.DB) {
 	t.Helper()
@@ -46,7 +49,7 @@ func adminTestMux(t *testing.T) (*httptest.Server, *gorm.DB) {
 	}
 	sqlDB, _ := db.DB()
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&entities.User{}, &entities.SiteSettings{}, &entities.AIQueueConfig{}, &entities.AIProvider{}, &entities.ChatSession{}, &entities.Message{}, &entities.SearchResult{}, &entities.ImageResult{}, &entities.UsageLog{}, &entities.CrawlJob{}, &entities.SearchHistory{}, &entities.AnonymousUsage{}, &entities.Note{}, &entities.MapPoint{}, &entities.RegisterVisit{}); err != nil {
+	if err := db.AutoMigrate(&entities.User{}, &entities.SiteSettings{}, &entities.AIQueueConfig{}, &entities.AIProvider{}, &entities.ChatSession{}, &entities.Message{}, &entities.SearchResult{}, &entities.ImageResult{}, &entities.UsageLog{}, &entities.CrawlJob{}, &entities.SearchHistory{}, &entities.AnonymousUsage{}, &entities.Note{}, &entities.MapPoint{}, &entities.RegisterVisit{}, &entities.MiniApp{}, &entities.MiniAppApiDoc{}); err != nil {
 		t.Fatal(err)
 	}
 	seed := func(user *entities.User, password string) {
@@ -67,6 +70,14 @@ func adminTestMux(t *testing.T) (*httptest.Server, *gorm.DB) {
 	if err := db.Create(&entities.AIQueueConfig{ID: 1, MaxConcurrent: 4, MaxQueueSize: 20, RequestTimeoutMS: 60000, PerUserRateLimit: 10}).Error; err != nil {
 		t.Fatal(err)
 	}
+	// Minimal API reference rows so the public /mini-apps/api-docs endpoints
+	// behave like the production seed (see internal/database/seedMiniAppApiDocs).
+	if err := db.Create(&entities.MiniAppApiDoc{Section: "Overview", Title: "Mini Apps API", SortOrder: 1, Markdown: "# Mini Apps API\nConventions: envelope + same-origin token."}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&entities.MiniAppApiDoc{Section: "AI (Ask)", Title: "POST /api/v1/ask", Method: "POST", Path: "/api/v1/ask", SortOrder: 10, Markdown: "Ask the platform AI: /api/v1/ask"}).Error; err != nil {
+		t.Fatal(err)
+	}
 
 	cfg := config.Config{JWTSecret: "admin-test-secret-32-chars-minimum", JWTTTLHours: 24}
 	authService := services.NewAuthService(repositories.NewUserRepository(db), repositories.NewQueueConfigRepository(db), cfg)
@@ -81,7 +92,8 @@ func adminTestMux(t *testing.T) (*httptest.Server, *gorm.DB) {
 	pollinationsHandler := handlers.NewPollinationsHandler(adminService, services.NewPollinationsService("https://media.pollinations.ai"))
 	siteService := services.NewSiteService(repositories.NewSiteRepository(db))
 	visitorHandler := handlers.NewVisitorHandler(repositories.NewRegisterVisitRepository(db))
-	mux := New("*", t.TempDir(), siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService, historyService), nil, aiHandler, adminHandler, appsHandler, pollinationsHandler, visitorHandler, authService)
+	miniAppsHandler := handlers.NewMiniAppsHandler(services.NewMiniAppService(repositories.NewMiniAppRepository(db)), services.NewApiDocsService(repositories.NewApiDocRepository(db)), aiHandler, authService)
+	mux := New("*", t.TempDir(), siteService, handlers.NewAuthHandler(authService), handlers.NewUserHandler(userService, historyService), nil, aiHandler, adminHandler, appsHandler, pollinationsHandler, visitorHandler, miniAppsHandler, authService)
 	server := httptest.NewServer(mux)
 	t.Cleanup(server.Close)
 	return server, db

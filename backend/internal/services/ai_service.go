@@ -572,6 +572,8 @@ func CodeForError(err error) string {
 		return "AISY01003"
 	case errors.Is(err, ErrAIUnavailable):
 		return "AISY01001"
+	case errors.Is(err, ErrMiniAppGenerate):
+		return "MINI02001"
 	default:
 		return "AISY01001"
 	}
@@ -601,6 +603,8 @@ func SanitizedErrorMessage(err error) string {
 		return "The answer took too long — please try again."
 	case errors.Is(err, ErrAIProviderError):
 		return "The AI service returned an error — please try again."
+	case errors.Is(err, ErrMiniAppGenerate):
+		return "The AI couldn't design a usable mini app from that prompt — try a more specific description."
 	default:
 		return "The AI service is temporarily unavailable — please try again."
 	}

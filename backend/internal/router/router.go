@@ -15,7 +15,7 @@ import (
 	"intellisearch/internal/services"
 )
 
-func New(corsOrigins, uploadsDir string, siteService *services.SiteService, authHandler *handlers.AuthHandler, userHandler *handlers.UserHandler, sessionHandler *handlers.SessionHandler, aiHandler *handlers.AIHandler, adminHandler *handlers.AdminHandler, appsHandler *handlers.AppsHandler, pollinationsHandler *handlers.PollinationsHandler, visitorHandler *handlers.VisitorHandler, authService *services.AuthService) *gin.Engine {
+func New(corsOrigins, uploadsDir string, siteService *services.SiteService, authHandler *handlers.AuthHandler, userHandler *handlers.UserHandler, sessionHandler *handlers.SessionHandler, aiHandler *handlers.AIHandler, adminHandler *handlers.AdminHandler, appsHandler *handlers.AppsHandler, pollinationsHandler *handlers.PollinationsHandler, visitorHandler *handlers.VisitorHandler, miniAppsHandler *handlers.MiniAppsHandler, authService *services.AuthService) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery(), middleware.ErrorHandler())
 	r.Use(cors(corsOrigins))
@@ -67,6 +67,14 @@ func New(corsOrigins, uploadsDir string, siteService *services.SiteService, auth
 	v1.POST("/stats/register-visit", visitorHandler.TrackRegisterVisit)
 	v1.GET("/sessions/:id", sessionHandler.Get)
 	v1.POST("/sessions/:id/suggestions", aiHandler.SessionSuggestions)
+	// Mini apps: the shared app drawer/gallery and runner are public; the CRUD,
+	// AI generation, and Studio surface live under /me (authenticated). Static
+	// doc routes must be registered before the :slug param for routing safety.
+	v1.GET("/mini-apps", miniAppsHandler.PublicList)
+	v1.GET("/mini-apps/api-docs", miniAppsHandler.ApiDocs)
+	v1.GET("/mini-apps/api-docs/ai.md", miniAppsHandler.ApiDocMarkdown)
+	v1.GET("/mini-apps/api-docs/:file", miniAppsHandler.ApiDocMarkdown)
+	v1.GET("/mini-apps/:slug", miniAppsHandler.PublicGet)
 	protected := v1.Group("")
 	protected.Use(middleware.RequireAuth(authService))
 	protected.GET("/me", userHandler.Me)
@@ -75,6 +83,12 @@ func New(corsOrigins, uploadsDir string, siteService *services.SiteService, auth
 	protected.GET("/me/history", userHandler.History)
 	protected.GET("/me/history/suggestions", userHandler.Suggestions)
 	protected.DELETE("/me/history", userHandler.ClearHistory)
+	protected.GET("/me/mini-apps", miniAppsHandler.ListMine)
+	protected.POST("/me/mini-apps", miniAppsHandler.Create)
+	protected.POST("/me/mini-apps/generate", miniAppsHandler.Generate)
+	protected.GET("/me/mini-apps/:id", miniAppsHandler.Get)
+	protected.PATCH("/me/mini-apps/:id", miniAppsHandler.Update)
+	protected.DELETE("/me/mini-apps/:id", miniAppsHandler.Delete)
 	// Mini apps: notes (personal, incl. save-summary) and translator (proxied
 	// server-side to the LibreTranslate container).
 	protected.GET("/me/notes", appsHandler.ListNotes)

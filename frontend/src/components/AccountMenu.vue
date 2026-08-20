@@ -48,6 +48,7 @@ async function logout() {
 
 function goSettings() { close(); router.push('/account') }
 function goHistory() { close(); router.push('/history') }
+function goStudio() { close(); router.push('/apps') }
 function goSignIn() { close(); router.push('/login') }
 function goControlPanel() { close(); router.push('/admin') }
 
@@ -108,6 +109,7 @@ onUnmounted(() => {
             <div class="account-menu-section-label">Session</div>
             <button type="button" class="account-menu-item" role="menuitem" @click="goSettings">User settings</button>
             <button type="button" class="account-menu-item" role="menuitem" @click="goHistory">Search history</button>
+            <button type="button" class="account-menu-item" role="menuitem" @click="goStudio">Mini Apps Studio</button>
             <button v-if="auth.isSuperOwner" type="button" class="account-menu-item" role="menuitem" @click="goControlPanel">Control panel</button>
             <button type="button" class="account-menu-item account-menu-item--danger" role="menuitem" @click="logout">Log out</button>
           </div>
