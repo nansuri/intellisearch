@@ -6,8 +6,8 @@ import AppHeader from '../components/AppHeader.vue'
 import ErrorBanner from '../components/ErrorBanner.vue'
 import UrlAskBox from '../components/UrlAskBox.vue'
 import CollapsibleAnswer from '../components/CollapsibleAnswer.vue'
-import FollowUpBlock, { type FollowUpEntry } from '../components/FollowUpBlock.vue'
-import ResearchLoading from '../components/ResearchLoading.vue'
+import AISummaryTab from '../components/AISummaryTab.vue'
+import type { FollowUpEntry } from '../components/FollowUpBlock.vue'
 import ImageGrid from '../components/ImageGrid.vue'
 import MapCard from '../components/MapCard.vue'
 import WebResultList from '../components/WebResultList.vue'
@@ -34,11 +34,9 @@ const query = computed(() => String(route.query.q || '').trim())
 const urlSessionId = computed(() => String(route.query.session || '').trim())
 // Ask mode: 'enhanced' runs the AI pipeline (default), 'search' returns raw web results.
 const mode = ref<AskMode>(route.query.mode === 'search' ? 'search' : 'enhanced')
-// Google-style result tabs: All shows the answer + sources, Images the image grid.
-const activeTab = ref<'all' | 'images'>('all')
-// Send-mode toggle next to the Ask button: follow-up continues the thread,
-// new search starts fresh with the typed question.
-const followUpMode = ref(true)
+// Result tabs: All shows the web results, AI Summary hosts the AI overview +
+// follow-up conversation, Images the image grid.
+const activeTab = ref<'all' | 'ai' | 'images'>('all')
 const loading = ref(false)
 const restoring = ref(false)
 const error = ref<string | null>(null)
@@ -172,7 +170,6 @@ function resetState() {
   followUpSeq = 0
   mode.value = route.query.mode === 'search' ? 'search' : 'enhanced'
   activeTab.value = 'all'
-  followUpMode.value = true
 }
 
 async function bootstrap() {
@@ -284,18 +281,11 @@ async function followUp(question: string) {
 }
 
 function onAsk(question: string) {
-  if (sessionId.value && followUpMode.value && question.trim() === query.value) return
-  if (sessionId.value) {
-    if (followUpMode.value) {
-      followUp(question)
-      return
-    }
-    // "New search" mode: drop the thread and run the typed question fresh.
-    clearSearchSession()
-    resetState()
-    router.push({ path: '/search', query: { q: question, mode: mode.value } })
-    return
-  }
+  if (sessionId.value && question.trim() === query.value) return
+  // The header box always starts a fresh search; follow-ups live in the
+  // "AI Summary" tab, so there is no follow-up branch here anymore.
+  clearSearchSession()
+  resetState()
   router.push({ path: '/search', query: { q: question, mode: mode.value } })
 }
 
@@ -382,11 +372,9 @@ watch(
       <template #center>
         <AskBox
           variant="google"
-          :placeholder="sessionId ? 'Ask a follow-up…' : 'Ask a question, explore an idea…'"
-          :has-session="Boolean(sessionId)"
-          :follow-up="followUpMode"
+          placeholder="Ask a question, explore an idea…"
+          :has-session="false"
           @submit="onAsk"
-          @update:follow-up="followUpMode = $event"
         />
       </template>
     </AppHeader>
@@ -429,25 +417,14 @@ watch(
       </template>
 
       <template v-else>
-        <div v-if="images.length" class="result-tabs" role="tablist" aria-label="Result type">
+        <div class="result-tabs" role="tablist" aria-label="Result type">
           <button type="button" role="tab" :aria-selected="activeTab === 'all'" :class="{ active: activeTab === 'all' }" @click="activeTab = 'all'">All</button>
-          <button type="button" role="tab" :aria-selected="activeTab === 'images'" :class="{ active: activeTab === 'images' }" @click="activeTab = 'images'">Images</button>
+          <button v-if="mode === 'enhanced' || Boolean(answer)" type="button" role="tab" :aria-selected="activeTab === 'ai'" :class="{ active: activeTab === 'ai' }" @click="activeTab = 'ai'">{{ mode === 'enhanced' ? 'AI Summary' : 'Summary' }}</button>
+          <button v-if="images.length" type="button" role="tab" :aria-selected="activeTab === 'images'" :class="{ active: activeTab === 'images' }" @click="activeTab = 'images'">Images</button>
         </div>
 
         <template v-if="activeTab === 'all'">
           <template v-if="mode === 'enhanced'">
-            <CollapsibleAnswer
-              label="AI overview"
-              :answer="answer"
-              :sources="sources"
-              :query="query"
-              :collapsed="primaryCollapsed"
-              :map-center="mapCenter"
-              :map-markers="mapMarkers"
-              :show-sources="false"
-              class="ai-overview"
-              @update:collapsed="(value) => { primaryCollapsed = value; persistState() }"
-            />
             <section v-if="sources.length" class="web-search-section" aria-label="Web search results">
               <div class="web-search-head">
                 <h2 class="web-search-title">
@@ -514,40 +491,36 @@ watch(
           </section>
         </template>
 
-        <section v-else-if="images.length" class="image-tab-content">
+        <section v-else-if="activeTab === 'ai'" class="ai-tab-content">
+          <AISummaryTab
+            :answer="answer"
+            :sources="sources"
+            :map-center="mapCenter"
+            :map-markers="mapMarkers"
+            :collapsed="primaryCollapsed"
+            :thread="thread"
+            :active-follow-up-id="activeFollowUpId"
+            :can-follow-up="Boolean(sessionId)"
+            :search-only="mode === 'search'"
+            @update:collapsed="(value) => { primaryCollapsed = value; persistState() }"
+            @update:collapsed-followup="setFollowUpCollapsed"
+            @follow-up="followUp"
+          />
+        </section>
+
+        <section v-else-if="activeTab === 'images' && images.length" class="image-tab-content">
           <ImageGrid :images="images" />
         </section>
       </template>
-
-      <section v-if="thread.length" class="follow-up-thread">
-        <div v-if="thread.some((e) => e.loading || e.highlighted)" class="follow-up-thread-hint">
-          <span class="live-dot" />
-          New follow-up in progress — previous answers are summarized above.
-        </div>
-        <FollowUpBlock
-          v-for="(entry, index) in thread"
-          :key="entry.id"
-          :entry="entry"
-          :index="index"
-          :active="entry.id === activeFollowUpId"
-          :search-only="mode === 'search'"
-          @update:collapsed="setFollowUpCollapsed(entry.id, $event)"
-        />
-      </section>
     </section>
   </main>
 </template>
 
 <style scoped>
 .search-results-only { min-width: 0; margin-top: 38px; padding: 0 0 28px; border-bottom: 1px solid var(--color-border); }
-/* The AI overview's own bottom border is dropped so the separator between the
-   summary and the highlighted web search comes from a single border line. */
-.ai-overview.collapsible-answer:not(.collapsible-answer--collapsed) { border-bottom: 0; padding-bottom: 0; }
 .web-search-section {
   min-width: 0;
-  margin-top: 30px;
-  padding-top: 26px;
-  border-top: 1px solid var(--color-border);
+  margin-top: 8px;
 }
 .web-search-head {
   display: flex;
@@ -593,18 +566,6 @@ watch(
   margin-top: 8px;
   padding-top: 18px;
   border-top: 0;
-}
-.follow-up-thread-hint {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  padding: 10px 14px;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--color-primary) 5%, var(--color-surface));
-  color: var(--color-muted);
-  font-size: .78rem;
 }
 .guest-limit-banner {
   display: flex;
@@ -678,6 +639,7 @@ watch(
   background: var(--color-primary);
 }
 .image-tab-content { padding-top: 6px; }
+.ai-tab-content { padding-top: 6px; }
 .result-location-tag { color: var(--color-primary); font-weight: 680; }
 .location-note {
   margin: 12px 0 0;

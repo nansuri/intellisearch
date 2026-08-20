@@ -6,19 +6,20 @@ The main use case of the platform — the app behaves like **AI-as-searchable-it
 
 ## Layout
 
-- **Header (persistent):** site name/logo, a compact ask box (Google-results style), and the top-right avatar/account button.
+- **Header (persistent):** site name/logo, a compact ask box (Google-results style, always starts a **new search**), and the top-right avatar/account button.
 - **Result body (below the header):**
   1. **Query header** — the question, source count, and timing (e.g., "About 12 sources · 1.2s").
-  2. **AI Summary card** — the combined answer synthesized from the source pages, with inline numbered citations ([1], [2], …) that link to the matching source.
-  3. **Web sources list** — numbered result cards, each with favicon, domain, title, snippet, and full URL; clicking opens the page in a new tab. Ordered by relevance; each card maps to its citation number in the summary.
-  4. **Follow-up thread** — the Q&A history for this query: the original question, its summary + sources, and every follow-up with its own summary and (when new web data was fetched) its own source cards.
-- **Loading state:** skeleton placeholders while scraping; the summary card and source cards appear progressively as each completes.
+  2. **Result tabs** — **All** (web sources), **AI Summary** (AI overview + follow-up conversation), **Images** (when the search returned images). Defaults to **All** so the web results are the first thing shown.
+  3. **All tab → Web sources list** — numbered result cards, each with favicon, domain, title, snippet, and full URL; clicking opens the page in a new tab. Ordered by relevance; each card maps to its citation number in the summary.
+  4. **AI Summary tab** — the AI answer behind a Google AI Overview-style **envelope**: a soft, tinted card that shows a preview and a "Read full summary" action; tapping expands the full cited answer inline. Below it is the **follow-up panel** with a composer and the follow-up thread.
+- **Loading state:** animated research mascot while scraping; the summary card and source cards appear progressively as each completes.
 - **Search backend:** source listings come from a self-hosted **SearXNG** metasearch container on the same server, called backend-to-backend; the crawler fetches the top sources' page content so the summary is grounded in full text, not just snippets.
 
-## Follow-up Questions
+## AI Summary tab & Follow-up Questions
 
-- The ask box on the result page accepts follow-up questions; submitting keeps the current session context (original question + prior answers) and runs in the same chat session.
-- When a session is active the ask box shows a **radio switch** beside the submit button to pick the send mode: **Follow-up** (continue the current conversation) or **New search** (drop the thread and start fresh).
+- The **AI Summary tab** hosts the AI overview (default collapsed behind the envelope) and the **follow-up conversation**.
+- A **follow-up composer** at the top of the thread accepts the next question; submitting keeps the current session context (original question + prior answers) and runs in the same chat session. The composer disables while a follow-up is in progress.
+- The header ask box has no send-mode toggle anymore — it always starts a fresh search; follow-ups live exclusively in the AI Summary tab.
 - Each follow-up produces its own AI answer, appended to the thread; if new web data is needed, its source cards appear inline.
 - **Suggested follow-ups:** below each summary the AI proposes 2–3 follow-up chips (e.g., "What about air freight?"); tapping a chip submits it as a follow-up.
 - Rate limits and the daily question quota apply to follow-ups exactly like initial questions.
@@ -39,13 +40,24 @@ The main use case of the platform — the app behaves like **AI-as-searchable-it
 │  cheapest way to ship to Japan                               │
 │  About 12 sources · 1.2s                                     │
 │                                                              │
-│  ┌─ AI Summary ────────────────────────────────────────────┐ │
-│  │ The cheapest options are sea freight and surface mail. │ │
-│  │ Sea freight is cheapest over 10kg [1]; Japan Post      │ │
-│  │ surface mail wins for small parcels under 2kg [2].     │ │
+│  All  [ AI Summary ]  Images                                 │
+│  ──────────────────────────────────────────────────────────  │
+│                                                              │
+│  ┌─ AI Summary (envelope) ────────────────────────────────┐ │
+│  │ ✦ AI OVERVIEW                     (2 results)          │ │
+│  │ The cheapest options are sea freight and surface mail… │ │
+│  │ ───────────────────────────────────────────────────    │ │
+│  │ Just a taste — dive in for the full picture            │ │
+│  │                                      Read full summary → │
+│  │ ───────────────────────────────────────────────────    │ │
+│  │ Keep digging                                           │ │
+│  │ Ask a follow-up below and the AI keeps building…       │ │
+│  │ [ ↟ Ask a follow-up question…           ] [ Send ]      │ │
+│  │                                                         │ │
+│  │  Follow-up 1 …                                          │ │
 │  └─────────────────────────────────────────────────────────┘ │
 │                                                              │
-│  Web sources                                                 │
+│  All tab → Web search                                        │
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │ [1] 🌐 japanpost.jp   Cheap Shipping Methods           │ │
 │  │     Surface mail rates for small parcels               │ │
@@ -55,8 +67,6 @@ The main use case of the platform — the app behaves like **AI-as-searchable-it
 │  │     Compare sea vs air freight per kg                  │ │
 │  │     https://www.freightos.com/...                      │ │
 │  └─────────────────────────────────────────────────────────┘ │
-│                                                              │
-│  Suggested follow-ups: [What about air freight?] [Size limit]│
 └──────────────────────────────────────────────────────────────┘
 ```
 

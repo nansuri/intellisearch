@@ -143,34 +143,36 @@ function collapse() { emit('update:collapsed', true) }
 .collapse-toggle:hover { border-color: var(--color-primary); color: var(--color-primary); }
 .collapsed-chip {
   position: relative;
+  overflow: hidden;
   display: grid;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  padding: 16px 18px 14px 22px;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
-  border-radius: 16px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 6%, var(--color-surface)), var(--color-surface));
-  box-shadow: var(--shadow-search);
+  padding: 18px 20px 16px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 18%, var(--color-border));
+  border-radius: 18px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 6%, var(--color-surface)), var(--color-surface) 34%);
+  box-shadow: 0 6px 20px var(--color-shadow);
   color: inherit;
   cursor: pointer;
   text-align: left;
-  transition: border-color .16s ease, background .16s ease, transform .16s ease, box-shadow .16s ease;
+  transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
 }
+/* Soft gradient hairline across the top, Google AI Overview style. */
 .collapsed-chip::before {
   content: '';
   position: absolute;
-  top: 12px;
-  bottom: 12px;
-  left: 0;
-  width: 4px;
-  border-radius: 0 4px 4px 0;
-  background: linear-gradient(180deg, var(--color-primary), var(--color-primary-hover));
+  top: 0;
+  left: 18px;
+  right: 18px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--color-primary), transparent);
+  opacity: .55;
 }
 .collapsed-chip:hover {
-  border-color: color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
-  background: linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 9%, var(--color-surface)), var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-primary) 34%, var(--color-border));
   transform: translateY(-1px);
-  box-shadow: 0 12px 32px var(--color-shadow);
+  box-shadow: 0 10px 28px var(--color-shadow);
 }
 .collapsed-chip-head {
   display: flex;
@@ -185,16 +187,15 @@ function collapse() { emit('update:collapsed', true) }
   color: var(--color-primary);
   font-size: .68rem;
   font-weight: 760;
-  letter-spacing: .08em;
+  letter-spacing: .09em;
   text-transform: uppercase;
 }
 .collapsed-chip-icon { flex: 0 0 auto; }
 .collapsed-chip-count {
   flex: 0 0 auto;
   padding: 4px 10px;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-primary) 9%, var(--color-surface));
   color: var(--color-primary);
   font-size: .7rem;
   font-weight: 680;
@@ -203,8 +204,8 @@ function collapse() { emit('update:collapsed', true) }
 .collapsed-chip-preview {
   margin: 0;
   color: var(--color-text);
-  font-size: .9rem;
-  line-height: 1.55;
+  font-size: .92rem;
+  line-height: 1.6;
 }
 .collapsed-chip-meta {
   display: flex;
@@ -212,22 +213,24 @@ function collapse() { emit('update:collapsed', true) }
   justify-content: space-between;
   gap: 14px;
   margin-top: 2px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
 }
-.collapsed-chip-hint { color: var(--color-muted); font-size: .72rem; }
+.collapsed-chip-hint { color: var(--color-muted); font-size: .73rem; }
 .collapsed-chip-action {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: var(--color-primary);
-  color: var(--color-primary-contrast);
-  font-size: .74rem;
-  font-weight: 720;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: .78rem;
+  font-weight: 700;
   white-space: nowrap;
-  transition: background .16s ease, transform .16s ease;
+  transition: color .16s ease;
 }
-.collapsed-chip:hover .collapsed-chip-action { background: var(--color-primary-hover); }
+.collapsed-chip:hover .collapsed-chip-action { color: var(--color-primary-hover); }
 .collapsed-chip-arrow { transition: transform .16s ease; }
 .collapsed-chip:hover .collapsed-chip-arrow { transform: translateX(3px); }
 .sources--nested { margin-top: 0; }
