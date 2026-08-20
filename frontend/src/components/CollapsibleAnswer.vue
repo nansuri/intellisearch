@@ -15,6 +15,7 @@ const props = withDefaults(defineProps<{
   highlighted?: boolean
   showSources?: boolean
   compact?: boolean
+  actionLabel?: string
   emptyLabel?: string
   mapCenter?: MapPoint | null
   mapMarkers?: MapPoint[]
@@ -25,6 +26,7 @@ const props = withDefaults(defineProps<{
   highlighted: false,
   showSources: true,
   compact: false,
+  actionLabel: 'Read full summary',
   emptyLabel: 'No answer yet. Try asking again.',
   mapCenter: null,
   mapMarkers: () => [],
@@ -55,18 +57,32 @@ function collapse() { emit('update:collapsed', true) }
       :aria-expanded="false"
       @click="expand"
     >
-      <span class="collapsed-chip-label">{{ label }}</span>
+      <span class="collapsed-chip-head">
+        <span class="collapsed-chip-label">
+          <svg class="collapsed-chip-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+            <path d="M12 2.4l1.9 5.2 5.2 1.9-5.2 1.9L12 16.6l-1.9-5.2-5.2-1.9 5.2-1.9z" fill="currentColor" />
+            <path d="M19.5 14.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" fill="currentColor" />
+          </svg>
+          {{ label }}
+        </span>
+        <span v-if="sources.length" class="collapsed-chip-count">{{ sources.length }} result{{ sources.length === 1 ? '' : 's' }}</span>
+      </span>
       <p class="collapsed-chip-preview">{{ preview }}</p>
       <span class="collapsed-chip-meta">
-        <span v-if="sources.length">{{ sources.length }} result{{ sources.length === 1 ? '' : 's' }}</span>
-        <span class="collapsed-chip-action">Show full answer</span>
+        <span class="collapsed-chip-hint">Just a taste — dive in for the full picture</span>
+        <span class="collapsed-chip-action">
+          {{ actionLabel }}
+          <svg class="collapsed-chip-arrow" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+            <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </span>
       </span>
     </button>
 
     <template v-else>
       <div class="collapsible-answer-head">
         <div class="section-label">{{ label }}</div>
-        <button v-if="canCollapse" type="button" class="collapse-toggle" @click="collapse">Collapse</button>
+        <button v-if="canCollapse" type="button" class="collapse-toggle" @click="collapse">Hide summary</button>
       </div>
       <MarkdownView v-if="answer" :content="answer" />
       <p v-else>{{ emptyLabel }}</p>
@@ -126,44 +142,94 @@ function collapse() { emit('update:collapsed', true) }
 }
 .collapse-toggle:hover { border-color: var(--color-primary); color: var(--color-primary); }
 .collapsed-chip {
+  position: relative;
   display: grid;
-  gap: 6px;
+  gap: 10px;
   width: 100%;
-  padding: 14px 16px;
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
-  background: var(--color-surface-subtle);
+  padding: 16px 18px 14px 22px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+  border-radius: 16px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 6%, var(--color-surface)), var(--color-surface));
+  box-shadow: var(--shadow-search);
   color: inherit;
   cursor: pointer;
   text-align: left;
-  transition: border-color .16s ease, background .16s ease, transform .16s ease;
+  transition: border-color .16s ease, background .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+.collapsed-chip::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 0;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(180deg, var(--color-primary), var(--color-primary-hover));
 }
 .collapsed-chip:hover {
-  border-color: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
-  background: color-mix(in srgb, var(--color-primary) 5%, var(--color-surface-subtle));
+  border-color: color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-primary) 9%, var(--color-surface)), var(--color-surface));
   transform: translateY(-1px);
+  box-shadow: 0 12px 32px var(--color-shadow);
+}
+.collapsed-chip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 .collapsed-chip-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   color: var(--color-primary);
   font-size: .68rem;
   font-weight: 760;
   letter-spacing: .08em;
   text-transform: uppercase;
 }
+.collapsed-chip-icon { flex: 0 0 auto; }
+.collapsed-chip-count {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  color: var(--color-primary);
+  font-size: .7rem;
+  font-weight: 680;
+  white-space: nowrap;
+}
 .collapsed-chip-preview {
   margin: 0;
   color: var(--color-text);
-  font-size: .88rem;
-  line-height: 1.5;
+  font-size: .9rem;
+  line-height: 1.55;
 }
 .collapsed-chip-meta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-  color: var(--color-muted);
-  font-size: .72rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 2px;
 }
-.collapsed-chip-action { color: var(--color-primary); font-weight: 650; }
+.collapsed-chip-hint { color: var(--color-muted); font-size: .72rem; }
+.collapsed-chip-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+  font-size: .74rem;
+  font-weight: 720;
+  white-space: nowrap;
+  transition: background .16s ease, transform .16s ease;
+}
+.collapsed-chip:hover .collapsed-chip-action { background: var(--color-primary-hover); }
+.collapsed-chip-arrow { transition: transform .16s ease; }
+.collapsed-chip:hover .collapsed-chip-arrow { transform: translateX(3px); }
 .sources--nested { margin-top: 0; }
 :deep(.web-results) { margin-top: 6px; }
 .collapsible-answer--compact { margin-top: 0; padding-bottom: 20px; }

@@ -46,8 +46,15 @@ const iconLetter = computed(() => (props.source.domain || 'w').trim().charAt(0).
 </template>
 
 <style scoped>
-.web-result { padding: 16px 0; border-bottom: 1px solid var(--color-border); }
+.web-result {
+  padding: 15px 14px;
+  margin-inline: -14px;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 12px;
+  transition: background .16s ease;
+}
 .web-result:last-of-type { border-bottom: 0; }
+.web-result:hover { background: var(--color-surface-subtle); }
 .web-result-link { display: block; min-width: 0; width: 100%; text-decoration: none; }
 .web-result-title-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .web-result-icon {

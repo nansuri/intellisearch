@@ -214,6 +214,9 @@ async function runInitial() {
     mapMarkers.value = result.mapMarkers || []
     sessionId.value = result.sessionId
     elapsed.value = Math.round((performance.now() - startedAt) / 100) / 10
+    // AI overview ships collapsed ("envelope") by default so the highlighted
+    // web results are the first thing people see; click to expand the summary.
+    primaryCollapsed.value = true
     persistState()
   } catch (cause) {
     guestLimitReached.value = isGuestLimit(cause)
@@ -317,7 +320,7 @@ async function submitUrl(url: string) {
     mapMarkers.value = result.mapMarkers || []
     sessionId.value = result.sessionId
     error.value = null
-    primaryCollapsed.value = false
+    primaryCollapsed.value = true
     persistState()
   } catch (cause) {
     if (isGuestLimit(cause)) {
@@ -441,8 +444,24 @@ watch(
               :collapsed="primaryCollapsed"
               :map-center="mapCenter"
               :map-markers="mapMarkers"
+              :show-sources="false"
+              class="ai-overview"
               @update:collapsed="(value) => { primaryCollapsed = value; persistState() }"
             />
+            <section v-if="sources.length" class="web-search-section" aria-label="Web search results">
+              <div class="web-search-head">
+                <h2 class="web-search-title">
+                  <svg class="web-search-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.9" />
+                    <path d="M15.8 15.8L20 20M11 7.8a3.2 3.2 0 0 1 3.2 3.2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" />
+                  </svg>
+                  Web search
+                </h2>
+                <span class="web-search-count">{{ sources.length }} result{{ sources.length === 1 ? '' : 's' }}</span>
+              </div>
+              <p class="web-search-note">The best sources we found across the web — cited, ranked, and ready to explore.</p>
+              <WebResultList :sources="sources" :query="query" heading="Top matches" :show-count="false" class="web-search-list" />
+            </section>
           </template>
 
           <section v-else class="search-results-only">
@@ -482,7 +501,7 @@ watch(
             </div>
           </section>
 
-          <section v-if="mode === 'enhanced' && !sources.length && !primaryCollapsed" class="empty-sources" :class="{ 'empty-sources--compact': Boolean(answer) }">
+          <section v-if="mode === 'enhanced' && !sources.length" class="empty-sources" :class="{ 'empty-sources--compact': Boolean(answer) }">
             <div class="empty-source-copy">
               <h2 v-if="!answer">No web sources yet</h2>
               <p>{{ answer ? 'No web sources for this answer. Submit a URL to read a specific page.' : 'Ask a different question, or submit a URL and the AI will read that page directly.' }}</p>
@@ -521,6 +540,49 @@ watch(
 
 <style scoped>
 .search-results-only { min-width: 0; margin-top: 38px; padding: 0 0 28px; border-bottom: 1px solid var(--color-border); }
+/* The AI overview's own bottom border is dropped so the separator between the
+   summary and the highlighted web search comes from a single border line. */
+.ai-overview.collapsible-answer:not(.collapsible-answer--collapsed) { border-bottom: 0; padding-bottom: 0; }
+.web-search-section {
+  min-width: 0;
+  margin-top: 30px;
+  padding-top: 26px;
+  border-top: 1px solid var(--color-border);
+}
+.web-search-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.web-search-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 720;
+  letter-spacing: -.03em;
+}
+.web-search-icon { flex: 0 0 auto; color: var(--color-primary); }
+.web-search-count {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface-subtle);
+  color: var(--color-muted);
+  font-size: .72rem;
+  font-weight: 680;
+  white-space: nowrap;
+}
+.web-search-note {
+  margin: 8px 0 0;
+  color: var(--color-muted);
+  font-size: .82rem;
+}
+.web-search-list :deep(.web-results) { margin-top: 18px; }
+.web-search-list :deep(.sources-heading) { display: none; }
 .search-results-head { display: flex; align-items: end; justify-content: space-between; gap: 18px; }
 .search-results-title { margin: 6px 0 0; font-size: 1.35rem; letter-spacing: -.03em; }
 .search-upgrade { flex: 0 0 auto; }
