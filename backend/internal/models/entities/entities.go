@@ -70,7 +70,13 @@ type AIQueueConfig struct {
 	// MaxImageResults caps how many image results are returned/persisted per
 	// web-search ask (0 = unlimited). Follow-up asks skip the image search
 	// entirely, so this only bounds the primary search. Admin-configurable.
-	MaxImageResults int       `gorm:"not null;default:20" json:"maxImageResults"`
+	MaxImageResults int `gorm:"not null;default:20" json:"maxImageResults"`
+	// SessionTTLHours is how long a signed-in JWT session lasts before the user
+	// must sign in again. 0 falls back to the deployment JWT_TTL_HOURS env value
+	// (default 168 hours / 7 days). Admin-editable from the Owner Control Panel;
+	// it applies to sessions signed in after it is saved — already-issued tokens
+	// keep their original expiry.
+	SessionTTLHours int       `gorm:"not null;default:168" json:"sessionTtlHours"`
 	UpdatedAt       time.Time `json:"updatedAt"`
 }
 

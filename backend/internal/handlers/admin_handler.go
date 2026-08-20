@@ -277,12 +277,13 @@ func (h *AdminHandler) UpdateQueueConfig(c *gin.Context) {
 		SuggestionCacheHours int `json:"suggestionCacheHours"`
 		DefaultDailyQuota    int `json:"defaultDailyQuota"`
 		MaxImageResults      int `json:"maxImageResults"`
+		SessionTTLHours      int `json:"sessionTtlHours"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
 		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN04001, "Enter valid queue settings.", "parse queue config", err)
 		return
 	}
-	config, err := h.admin.UpdateQueueConfig(request.MaxConcurrent, request.MaxQueueSize, request.RequestTimeoutMS, request.PerUserRateLimit, request.SuggestionCacheHours, request.DefaultDailyQuota, request.MaxImageResults)
+	config, err := h.admin.UpdateQueueConfig(request.MaxConcurrent, request.MaxQueueSize, request.RequestTimeoutMS, request.PerUserRateLimit, request.SuggestionCacheHours, request.DefaultDailyQuota, request.MaxImageResults, request.SessionTTLHours)
 	if err != nil {
 		middleware.RespondError(c, http.StatusBadRequest, contracts.ADMN04001, "That queue configuration is not valid.", "queue config invalid", err)
 		return

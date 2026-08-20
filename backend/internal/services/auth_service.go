@@ -75,6 +75,23 @@ func (s *AuthService) defaultDailyQuota() int {
 	return 3
 }
 
+// sessionTTL returns how long issued JWT sessions live. The admin-configurable
+// ai_queue_config.session_ttl_hours takes priority when set (0 = unset);
+// otherwise the deployment JWT_TTL_HOURS env value applies, defaulting to
+// 7 days. A panel edit applies to sessions signed in afterwards — already
+// issued tokens keep their original expiry and are never extended.
+func (s *AuthService) sessionTTL() time.Duration {
+	if s.queueConfig != nil {
+		if config, err := s.queueConfig.Get(); err == nil && config.SessionTTLHours > 0 {
+			return time.Duration(config.SessionTTLHours) * time.Hour
+		}
+	}
+	if s.ttl <= 0 {
+		return 168 * time.Hour
+	}
+	return s.ttl
+}
+
 // GoogleConfigured reports whether Google SSO credentials are present.
 func (s *AuthService) GoogleConfigured() bool {
 	return s.googleClientID != "" && s.googleClientSecret != "" && s.googleRedirectURL != ""
@@ -156,7 +173,7 @@ func (s *AuthService) GoogleCallback(code, state, expectedState string) (string,
 	if err := s.users.Save(&user); err != nil {
 		return "", entities.User{}, err
 	}
-	claims := Claims{UserID: user.ID.String(), Role: user.Role, RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(now.Add(s.ttl)), IssuedAt: jwt.NewNumericDate(now)}}
+	claims := Claims{UserID: user.ID.String(), Role: user.Role, RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(now.Add(s.sessionTTL())), IssuedAt: jwt.NewNumericDate(now)}}
 	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.secret)
 	return token, user, err
 }
@@ -230,7 +247,7 @@ func (s *AuthService) Register(name, email, password string) (string, entities.U
 	if err := s.users.Save(&user); err != nil {
 		return "", entities.User{}, err
 	}
-	claims := Claims{UserID: user.ID.String(), Role: user.Role, RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(now.Add(s.ttl)), IssuedAt: jwt.NewNumericDate(now)}}
+	claims := Claims{UserID: user.ID.String(), Role: user.Role, RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(now.Add(s.sessionTTL())), IssuedAt: jwt.NewNumericDate(now)}}
 	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.secret)
 	return token, user, err
 }
@@ -245,7 +262,7 @@ func (s *AuthService) Login(email, password string) (string, entities.User, erro
 	if err := s.users.Save(&user); err != nil {
 		return "", entities.User{}, err
 	}
-	claims := Claims{UserID: user.ID.String(), Role: user.Role, RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(now.Add(s.ttl)), IssuedAt: jwt.NewNumericDate(now)}}
+	claims := Claims{UserID: user.ID.String(), Role: user.Role, RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(now.Add(s.sessionTTL())), IssuedAt: jwt.NewNumericDate(now)}}
 	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.secret)
 	return token, user, err
 }

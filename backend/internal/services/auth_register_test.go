@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"intellisearch/internal/config"
 	"intellisearch/internal/models/entities"
@@ -86,5 +87,60 @@ func TestRegisterRejectsDuplicateEmail(t *testing.T) {
 	}
 	if _, _, err := service.Register("Second", "TAKEN@example.com", "password-123"); !errors.Is(err, ErrEmailTaken) {
 		t.Fatalf("expected ErrEmailTaken for duplicate email, got %v", err)
+	}
+}
+
+// TestSessionTTLResolution verifies the issued JWT lifetime: the
+// admin-editable ai_queue_config.session_ttl_hours wins when set (>0), and the
+// env JWT_TTL_HOURS fallback applies when it is 0 or the row is missing.
+func TestSessionTTLResolution(t *testing.T) {
+	ttlOf := func(t *testing.T, service *AuthService) time.Duration {
+		t.Helper()
+		token, _, err := service.Register("TTL User", "ttl@example.com", "password-123")
+		if err != nil {
+			t.Fatal(err)
+		}
+		claims, err := service.Parse(token)
+		if err != nil {
+			t.Fatalf("parse token: %v", err)
+		}
+		duration := time.Until(claims.ExpiresAt.Time)
+		if duration < 0 {
+			t.Fatalf("token already expired: %s", claims.ExpiresAt.Time)
+		}
+		return duration
+	}
+
+	// No queue-config row: the env JWT_TTL_HOURS (24h) applies.
+	service := newAuthService(t)
+	if got := ttlOf(t, service); got < 23*time.Hour || got > 25*time.Hour {
+		t.Fatalf("expected ~24h fallback session, got %s", got)
+	}
+
+	// A configured session_ttl_hours of 72 wins over the env value.
+	db := newTestDB(t)
+	if err := db.Create(&entities.AIQueueConfig{ID: 1, MaxConcurrent: 4, MaxQueueSize: 20, RequestTimeoutMS: 60000, PerUserRateLimit: 10, SessionTTLHours: 72}).Error; err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{JWTSecret: "register-test-secret-32-chars-minimum", JWTTTLHours: 24}
+	configured := NewAuthService(repositories.NewUserRepository(db), repositories.NewQueueConfigRepository(db), cfg)
+	if got := ttlOf(t, configured); got < 71*time.Hour || got > 73*time.Hour {
+		t.Fatalf("expected ~72h admin-configured session, got %s", got)
+	}
+
+	// A zero session_ttl_hours means "unset": fall back to the env value. It is
+	// written through the admin update path (Save persists zeros; Create would
+	// apply the 168 column default).
+	db2 := newTestDB(t)
+	if err := db2.Create(&entities.AIQueueConfig{ID: 1, MaxConcurrent: 4, MaxQueueSize: 20, RequestTimeoutMS: 60000, PerUserRateLimit: 10, SessionTTLHours: 168}).Error; err != nil {
+		t.Fatal(err)
+	}
+	admin := NewAdminService(repositories.NewProviderRepository(db2), repositories.NewQueueConfigRepository(db2), repositories.NewSiteRepository(db2), "k", t.TempDir())
+	if _, err := admin.UpdateQueueConfig(4, 20, 60000, 10, 6, 3, 20, 0); err != nil {
+		t.Fatalf("set session ttl to 0: %v", err)
+	}
+	zeroCfg := NewAuthService(repositories.NewUserRepository(db2), repositories.NewQueueConfigRepository(db2), cfg)
+	if got := ttlOf(t, zeroCfg); got < 23*time.Hour || got > 25*time.Hour {
+		t.Fatalf("expected 24h env fallback for zero config, got %s", got)
 	}
 }

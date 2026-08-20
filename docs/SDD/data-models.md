@@ -101,6 +101,7 @@
 | suggestion_cache_hours | int | hours the AI-composed history suggestions are reused per user before recomposing; 0 = always compose fresh. Editable from the Owner Control Panel (Queue & limits). |
 | default_daily_quota | int | daily AI-usage quota granted to newly registered accounts (password or Google SSO); 0 = unlimited. Default 3. Editable from the Owner Control Panel (Queue & limits); affects only accounts created afterwards. |
 | max_image_results | int | caps image results returned/persisted per web-search ask; 0 = unlimited. Default 20. Only the primary search of a thread fetches images (follow-ups skip). Editable from the Owner Control Panel (Queue & limits). |
+| session_ttl_hours | int | how long a signed-in JWT session lasts before re-sign-in; 0 = fall back to the deployment `JWT_TTL_HOURS` (default 168). Default 168. Editable from the Owner Control Panel (Queue & limits → Account session); applies to sessions signed in after the change — already-issued tokens keep their original expiry |
 
 ### site_settings (singleton row)
 | Field | Type | Notes |

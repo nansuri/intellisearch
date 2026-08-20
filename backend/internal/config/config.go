@@ -29,9 +29,12 @@ type Config struct {
 func Load() Config {
 	return Config{
 		Port: env("PORT", "8088"), AppEnv: env("APP_ENV", "development"),
-		CORSOrigins:     env("CORS_ORIGINS", "http://localhost:5173"),
-		JWTSecret:       env("JWT_SECRET", "change-me-32-chars-min"),
-		JWTTTLHours:     envInt("JWT_TTL_HOURS", 24),
+		CORSOrigins: env("CORS_ORIGINS", "http://localhost:5173"),
+		JWTSecret:   env("JWT_SECRET", "change-me-32-chars-min"),
+		// JWT_TTL_HOURS is the fallback session lifetime. The Owner Control
+		// Panel's admin-editable ai_queue_config.session_ttl_hours overrides it
+		// when set (see auth_service.sessionTTL); the default is 7 days.
+		JWTTTLHours:     envInt("JWT_TTL_HOURS", 168),
 		SuperOwnerEmail: os.Getenv("SUPER_OWNER_EMAIL"), SuperOwnerPassword: os.Getenv("SUPER_OWNER_PASSWORD"),
 		DBHost: env("DB_HOST", "localhost"), DBPort: env("DB_PORT", "5432"), DBUser: env("DB_USER", "aimain"),
 		DBPassword: env("DB_PASSWORD", "aimain"), DBName: env("DB_NAME", "aimain"), DBSSLMode: env("DB_SSLMODE", "disable"),

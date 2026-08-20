@@ -9,7 +9,7 @@ import LoadingSpinner from '../../components/LoadingSpinner.vue'
 const toast = useToastStore()
 const config = ref<QueueConfig | null>(null)
 const loading = ref(true); const saving = ref(false)
-const draft = ref({ maxConcurrent: 4, maxQueueSize: 100, requestTimeoutMs: 120000, perUserRateLimit: 10, suggestionCacheHours: 6, defaultDailyQuota: 3, maxImageResults: 20 })
+const draft = ref({ maxConcurrent: 4, maxQueueSize: 100, requestTimeoutMs: 120000, perUserRateLimit: 10, suggestionCacheHours: 6, defaultDailyQuota: 3, maxImageResults: 20, sessionTtlHours: 168 })
 
 async function load() {
   loading.value = true
@@ -18,7 +18,7 @@ async function load() {
 async function save() {
   saving.value = true
   try {
-    config.value = await updateQueueConfig({ ...draft.value, maxConcurrent: Number(draft.value.maxConcurrent), maxQueueSize: Number(draft.value.maxQueueSize), requestTimeoutMs: Number(draft.value.requestTimeoutMs), perUserRateLimit: Number(draft.value.perUserRateLimit), suggestionCacheHours: Number(draft.value.suggestionCacheHours), defaultDailyQuota: Number(draft.value.defaultDailyQuota), maxImageResults: Number(draft.value.maxImageResults) })
+    config.value = await updateQueueConfig({ ...draft.value, maxConcurrent: Number(draft.value.maxConcurrent), maxQueueSize: Number(draft.value.maxQueueSize), requestTimeoutMs: Number(draft.value.requestTimeoutMs), perUserRateLimit: Number(draft.value.perUserRateLimit), suggestionCacheHours: Number(draft.value.suggestionCacheHours), defaultDailyQuota: Number(draft.value.defaultDailyQuota), maxImageResults: Number(draft.value.maxImageResults), sessionTtlHours: Number(draft.value.sessionTtlHours) })
     toast.success('Queue settings applied immediately.')
   } catch (e) { toast.error((e as Error).message) } finally { saving.value = false }
 }
@@ -30,9 +30,13 @@ const summary = computed(() => [
   { label: 'Queue size', value: String(draft.value.maxQueueSize) },
   { label: 'Request timeout', value: formatTimeout(draft.value.requestTimeoutMs) },
   { label: 'Per-user rate', value: draft.value.perUserRateLimit ? `${draft.value.perUserRateLimit}/min` : 'Unlimited' },
+  { label: 'Session', value: formatSession(draft.value.sessionTtlHours) },
 ])
 function formatTimeout(ms: number): string {
   return ms >= 60000 ? `${Math.round(ms / 60000)} min` : `${Math.round(ms / 1000)} s`
+}
+function formatSession(hours: number): string {
+  return hours ? `${Math.round(hours / 24)} days` : 'Server default'
 }
 </script>
 <template>
@@ -78,6 +82,13 @@ function formatTimeout(ms: number): string {
           </FormField>
         </div>
 
+        <div class="setting-title"><div><div class="section-label">Sessions</div><h2>Account session</h2><p>How long a signed-in session lasts before the user must sign in again. Applies to logins after saving — already-signed-in users keep their current session.</p></div></div>
+        <div class="form-grid-2">
+          <FormField label="Session duration (hours)" hint="0 = fall back to the deployment default (7 days)">
+            <input v-model.number="draft.sessionTtlHours" type="number" class="text-input" min="0" required />
+          </FormField>
+        </div>
+
         <p class="form-hint">When the queue is full, users see a friendly “try again in a moment” message rather than an error.</p>
         <div class="modal-submit-row">
           <button class="base-button button-primary" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Apply settings' }}</button>
@@ -88,7 +99,7 @@ function formatTimeout(ms: number): string {
 </template>
 
 <style scoped>
-.queue-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 22px; }
+.queue-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 22px; }
 .setting-title { display: flex; align-items: start; justify-content: space-between; gap: 16px; padding-top: 2px; }
 .setting-title h2 { margin: 4px 0 0; font-size: 1rem; letter-spacing: -.02em; }
 .setting-title p { margin: 4px 0 0; color: var(--color-muted); font-size: .8rem; line-height: 1.5; }

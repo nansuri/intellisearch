@@ -475,12 +475,12 @@ func TestAdminProviderQueueAndBrandingLive(t *testing.T) {
 	}
 
 	// Queue config updates persist and are reflected by the runtime.
-	status, payload = call(t, server, http.MethodPatch, "/api/v1/admin/ai/queue-config", token, []byte(`{"maxConcurrent":6,"maxQueueSize":40,"requestTimeoutMs":120000,"perUserRateLimit":5}`))
+	status, payload = call(t, server, http.MethodPatch, "/api/v1/admin/ai/queue-config", token, []byte(`{"maxConcurrent":6,"maxQueueSize":40,"requestTimeoutMs":120000,"perUserRateLimit":5,"sessionTtlHours":72}`))
 	if status != http.StatusOK {
 		t.Fatalf("update queue config failed: %d %s", status, payload)
 	}
 	status, payload = call(t, server, http.MethodGet, "/api/v1/admin/ai/queue-config", token, nil)
-	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"maxConcurrent":6`)) {
+	if status != http.StatusOK || !bytes.Contains(payload, []byte(`"maxConcurrent":6`)) || !bytes.Contains(payload, []byte(`"sessionTtlHours":72`)) {
 		t.Fatalf("queue config not persisted: %d %s", status, payload)
 	}
 

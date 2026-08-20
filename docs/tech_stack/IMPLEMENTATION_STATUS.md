@@ -53,6 +53,7 @@ This document is the implementation truth for the repository. The PRD and SDD re
 - JWT login, authenticated profile read/update, avatar upload, and Super Owner role middleware.
 - Admin endpoints for user CRUD, statistics, provider CRUD, queue config, site settings, and logo upload (each route requires Super Owner); logo deletion returns branding to the default mark.
 - `GET /api/v1/admin/stats/trends` returns daily/weekly question counts (bucketed in the service so SQLite and PostgreSQL behave identically).
+- **Configurable session lifetime:** signed-in JWT sessions default to **7 days** (was 24 h) and the Super Owner can change the duration live from the Owner Control Panel (Queue & limits → Account session) via the new `session_ttl_hours` knob on `ai_queue_configs` — no redeploy. The active provider setting takes priority over the deployment `JWT_TTL_HOURS` env value (0 = fall back to it); it applies to sessions signed in after the change, and already-issued tokens keep their original expiry.
 - SearXNG JSON client with source/domain mapping.
 - Go URL validation and crawler-side URL validation for SSRF protection.
 
