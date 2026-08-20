@@ -7,6 +7,7 @@ import ErrorBanner from '../components/ErrorBanner.vue'
 import UrlAskBox from '../components/UrlAskBox.vue'
 import CollapsibleAnswer from '../components/CollapsibleAnswer.vue'
 import FollowUpBlock, { type FollowUpEntry } from '../components/FollowUpBlock.vue'
+import ResearchLoading from '../components/ResearchLoading.vue'
 import ImageGrid from '../components/ImageGrid.vue'
 import MapCard from '../components/MapCard.vue'
 import WebResultList from '../components/WebResultList.vue'
@@ -418,13 +419,10 @@ watch(
       <ErrorBanner v-else-if="error && !loading && !restoring" :message="error" @retry="runInitial" />
 
       <template v-if="loading || restoring">
-        <article class="summary-card">
-          <div class="section-label">{{ mode === 'search' ? 'Web results' : 'AI overview' }}</div>
-          <div class="skeleton-line" />
-          <div class="skeleton-line skeleton-line--short" />
-          <div class="skeleton-line" />
-          <div class="summary-note">{{ restoring ? 'Loading your previous answer…' : mode === 'search' ? 'Searching the web…' : 'Searching the web and reading the best sources…' }}</div>
-        </article>
+        <ResearchLoading
+          :label="restoring ? 'Restoring your search' : locating ? 'Getting your location' : mode === 'search' ? 'Searching the web' : 'Researching your question'"
+          :note="restoring ? 'Loading your previous conversation and its sources…' : locating ? 'Locating you for nearby, more relevant results…' : mode === 'search' ? 'Finding and ranking the best results across the web…' : 'Reading the best sources and building your answer…'"
+        />
       </template>
 
       <template v-else>
